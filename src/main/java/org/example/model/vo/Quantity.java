@@ -29,17 +29,6 @@ public record Quantity(int value) {
     }
 
     /**
-     * Static factory method for creating a Quantity instance.
-     *
-     * @param value The discrete count.
-     * @return A valid immutable Quantity instance.
-     * @throws IllegalArgumentException if value <= 0.
-     */
-    public static Quantity of(int value) {
-        return new Quantity(value);
-    }
-
-    /**
      * Produces a new Quantity representing the sum of this quantity and another.
      *
      * <p>REQUIRES: other != null.

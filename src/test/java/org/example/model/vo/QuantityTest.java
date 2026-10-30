@@ -14,7 +14,7 @@ class QuantityTest {
     @DisplayName("Should create valid Quantity for strictly positive integers")
     void shouldCreateValidQuantityForPositiveValues() {
         Quantity q1 = new Quantity(1);
-        Quantity q5 = Quantity.of(5);
+        Quantity q5 = new Quantity(5);
         Quantity q100 = new Quantity(100);
 
         assertEquals(1, q1.value());
@@ -36,8 +36,8 @@ class QuantityTest {
     @Test
     @DisplayName("Should correctly add two quantities without modifying originals (Producer)")
     void shouldAddQuantitiesCorrectly() {
-        Quantity q3 = Quantity.of(3);
-        Quantity q4 = Quantity.of(4);
+        Quantity q3 = new Quantity(3);
+        Quantity q4 = new Quantity(4);
 
         Quantity sum = q3.add(q4);
 
@@ -49,15 +49,15 @@ class QuantityTest {
     @Test
     @DisplayName("Should reject adding null quantity with NullPointerException")
     void shouldRejectAddingNullQuantity() {
-        Quantity q1 = Quantity.of(1);
+        Quantity q1 = new Quantity(1);
         assertThrows(NullPointerException.class, () -> q1.add(null));
     }
 
     @Test
     @DisplayName("Should correctly subtract a smaller quantity from a larger one")
     void shouldSubtractQuantitiesCorrectly() {
-        Quantity q10 = Quantity.of(10);
-        Quantity q4 = Quantity.of(4);
+        Quantity q10 = new Quantity(10);
+        Quantity q4 = new Quantity(4);
 
         Quantity diff = q10.subtract(q4);
 
@@ -68,9 +68,9 @@ class QuantityTest {
     @Test
     @DisplayName("Should reject subtraction if other is equal to or greater than this")
     void shouldRejectSubtractionResultingInNonPositive() {
-        Quantity q5 = Quantity.of(5);
-        Quantity q5Duplicate = Quantity.of(5);
-        Quantity q10 = Quantity.of(10);
+        Quantity q5 = new Quantity(5);
+        Quantity q5Duplicate = new Quantity(5);
+        Quantity q10 = new Quantity(10);
 
         // Equal subtraction (results in 0) -> rejected
         assertThrows(IllegalArgumentException.class, () -> q5.subtract(q5Duplicate));
@@ -82,9 +82,9 @@ class QuantityTest {
     @Test
     @DisplayName("Should evaluate isGreaterThan correctly")
     void shouldEvaluateIsGreaterThanCorrectly() {
-        Quantity q5 = Quantity.of(5);
-        Quantity q3 = Quantity.of(3);
-        Quantity q5Duplicate = Quantity.of(5);
+        Quantity q5 = new Quantity(5);
+        Quantity q3 = new Quantity(3);
+        Quantity q5Duplicate = new Quantity(5);
 
         assertTrue(q5.isGreaterThan(q3));
         assertFalse(q3.isGreaterThan(q5));
@@ -95,7 +95,7 @@ class QuantityTest {
     @DisplayName("Should verify structural equality and hashcode for records")
     void shouldVerifyStructuralEquality() {
         Quantity a = new Quantity(42);
-        Quantity b = Quantity.of(42);
+        Quantity b = new Quantity(42);
         Quantity c = new Quantity(99);
 
         assertEquals(a, b);

@@ -52,48 +52,6 @@ public record Money(BigDecimal amount, String currency) {
     }
 
     /**
-     * Static factory method for creating Money from a long integer amount.
-     *
-     * @param amount   The integer monetary amount.
-     * @param currency The currency code.
-     * @return A valid immutable Money instance.
-     */
-    public static Money of(long amount, String currency) {
-        return new Money(BigDecimal.valueOf(amount), currency);
-    }
-
-    /**
-     * Static factory method for creating Money from a BigDecimal amount.
-     *
-     * @param amount   The BigDecimal amount.
-     * @param currency The currency code.
-     * @return A valid immutable Money instance.
-     */
-    public static Money of(BigDecimal amount, String currency) {
-        return new Money(amount, currency);
-    }
-
-    /**
-     * Static factory method for creating Money in Tomans.
-     *
-     * @param amount The integer amount in Tomans.
-     * @return A valid Money instance with currency "TOMAN".
-     */
-    public static Money ofTomans(long amount) {
-        return new Money(BigDecimal.valueOf(amount), "TOMAN");
-    }
-
-    /**
-     * Static factory method for creating Money in Iranian Rials.
-     *
-     * @param amount The integer amount in Rials.
-     * @return A valid Money instance with currency "IRR".
-     */
-    public static Money ofRials(long amount) {
-        return new Money(BigDecimal.valueOf(amount), "IRR");
-    }
-
-    /**
      * Produces a new Money object representing the sum of this and another.
      *
      * <p>REQUIRES: other != null, this.currency.equals(other.currency).

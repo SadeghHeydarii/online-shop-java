@@ -14,7 +14,7 @@ class MoneyTest {
     @DisplayName("Should create valid Money with standardized scale of 2 decimal places")
     void shouldCreateValidMoneyWithStandardScale() {
         Money m1 = new Money(new BigDecimal("100"), "IRR");
-        Money m2 = Money.of(2500, "toman");
+        Money m2 = new Money(new BigDecimal("2500"), "toman");
 
         assertEquals(new BigDecimal("100.00"), m1.amount());
         assertEquals("IRR", m1.currency());
@@ -57,8 +57,8 @@ class MoneyTest {
     @Test
     @DisplayName("Should correctly add same-currency Money without modifying originals")
     void shouldAddMoneyCorrectly() {
-        Money m100 = Money.ofTomans(100);
-        Money m250 = Money.ofTomans(250);
+        Money m100 = new Money(new BigDecimal("100"), "TOMAN");
+        Money m250 = new Money(new BigDecimal("250"), "TOMAN");
 
         Money sum = m100.add(m250);
 
@@ -70,8 +70,8 @@ class MoneyTest {
     @Test
     @DisplayName("Should reject adding different currencies with IllegalArgumentException")
     void shouldRejectAdditionOfMismatchedCurrencies() {
-        Money tomans = Money.ofTomans(100);
-        Money rials = Money.ofRials(1000);
+        Money tomans = new Money(new BigDecimal("100"), "TOMAN");
+        Money rials = new Money(new BigDecimal("1000"), "IRR");
 
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
@@ -83,8 +83,8 @@ class MoneyTest {
     @Test
     @DisplayName("Should correctly subtract smaller amount from larger amount")
     void shouldSubtractMoneyCorrectly() {
-        Money m500 = Money.ofTomans(500);
-        Money m200 = Money.ofTomans(200);
+        Money m500 = new Money(new BigDecimal("500"), "TOMAN");
+        Money m200 = new Money(new BigDecimal("200"), "TOMAN");
 
         Money diff = m500.subtract(m200);
 
@@ -95,8 +95,8 @@ class MoneyTest {
     @Test
     @DisplayName("Should reject subtraction if other is greater than this")
     void shouldRejectSubtractionWhenInsufficient() {
-        Money m100 = Money.ofTomans(100);
-        Money m200 = Money.ofTomans(200);
+        Money m100 = new Money(new BigDecimal("100"), "TOMAN");
+        Money m200 = new Money(new BigDecimal("200"), "TOMAN");
 
         assertThrows(IllegalArgumentException.class, () -> m100.subtract(m200));
     }
@@ -104,8 +104,8 @@ class MoneyTest {
     @Test
     @DisplayName("Should correctly multiply Money by Quantity")
     void shouldMultiplyMoneyByQuantity() {
-        Money unitPrice = Money.ofTomans(15000);
-        Quantity qty = Quantity.of(3);
+        Money unitPrice = new Money(new BigDecimal("15000"), "TOMAN");
+        Quantity qty = new Quantity(3);
 
         Money total = unitPrice.multiply(qty);
 
@@ -116,8 +116,8 @@ class MoneyTest {
     @Test
     @DisplayName("Should compare Money values using isLessThan correctly")
     void shouldCompareMoneyValues() {
-        Money cheap = Money.ofTomans(1000);
-        Money expensive = Money.ofTomans(5000);
+        Money cheap = new Money(new BigDecimal("1000"), "TOMAN");
+        Money expensive = new Money(new BigDecimal("5000"), "TOMAN");
 
         assertTrue(cheap.isLessThan(expensive));
         assertFalse(expensive.isLessThan(cheap));
@@ -127,10 +127,10 @@ class MoneyTest {
     @Test
     @DisplayName("Should verify structural equality and hashCode for Money")
     void shouldVerifyStructuralEquality() {
-        Money a = Money.ofTomans(500);
+        Money a = new Money(new BigDecimal("500"), "TOMAN");
         Money b = new Money(new BigDecimal("500.00"), "TOMAN");
-        Money c = Money.ofTomans(600);
-        Money d = Money.ofRials(500);
+        Money c = new Money(new BigDecimal("600"), "TOMAN");
+        Money d = new Money(new BigDecimal("500"), "IRR");
 
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
