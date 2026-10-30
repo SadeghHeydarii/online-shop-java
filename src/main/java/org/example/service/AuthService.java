@@ -48,9 +48,22 @@ public class AuthService {
      * @param activeSessions the backing map for session tokens to user IDs
      */
     public AuthService(Map<String, User> userStore, Map<String, String> activeSessions) {
+        this(userStore, new ConcurrentHashMap<>(), activeSessions);
+    }
+
+    /**
+     * Constructs an {@code AuthService} with injected user, credentials, and active session storage maps.
+     *
+     * @param userStore        the backing map for user entities
+     * @param credentialsStore the backing map for user credentials hashes
+     * @param activeSessions   the backing map for session tokens to user IDs
+     */
+    public AuthService(Map<String, User> userStore,
+                       Map<String, String> credentialsStore,
+                       Map<String, String> activeSessions) {
         this.userStore = Objects.requireNonNull(userStore, "userStore cannot be null");
+        this.credentialsStore = Objects.requireNonNull(credentialsStore, "credentialsStore cannot be null");
         this.activeSessions = Objects.requireNonNull(activeSessions, "activeSessions cannot be null");
-        this.credentialsStore = new ConcurrentHashMap<>();
     }
 
     /**

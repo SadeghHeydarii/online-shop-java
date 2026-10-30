@@ -70,6 +70,16 @@
                     <argLine>-ea</argLine>
                 </configuration>
             </plugin>
+
+            <!-- Exec Maven Plugin for running the console application -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.2.0</version>
+                <configuration>
+                    <mainClass>org.example.Main</mainClass>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>
