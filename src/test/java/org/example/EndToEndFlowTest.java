@@ -14,12 +14,14 @@ import org.example.cli.menu.AdminMenu;
 import org.example.cli.menu.CustomerMenu;
 import org.example.cli.menu.GuestMenu;
 import org.example.model.entity.Cart;
-import org.example.model.entity.Category;
+import org.example.model.vo.Category;
 import org.example.model.entity.Order;
 import org.example.model.entity.Product;
 import org.example.model.entity.User;
 import org.example.model.enums.OrderStatus;
 import org.example.model.enums.PaymentMethod;
+import org.example.model.enums.PaymentStatus;
+import org.example.model.vo.PaymentTransaction;
 import org.example.model.enums.UserRole;
 import org.example.model.vo.Coupon;
 import org.example.model.vo.Money;
@@ -170,6 +172,9 @@ class EndToEndFlowTest {
             Order paidOrder = orderService.getOrderDetails(pendingOrder.getOrderId());
             assertEquals(OrderStatus.PAID, paidOrder.getStatus());
             assertTrue(paidOrder.getPaidAt().isPresent());
+            assertEquals(1, paidOrder.getTransactions().size());
+            assertEquals(PaymentStatus.SUCCESS, paidOrder.getTransactions().get(0).status());
+            assertEquals(paidOrder.getPayableAmount(), paidOrder.getTransactions().get(0).amount());
 
             // Verify stock permanently deducted
             assertEquals(initialLaptopStock - 1, productService.getProductById(thinkpad.getId()).getAvailableStock());

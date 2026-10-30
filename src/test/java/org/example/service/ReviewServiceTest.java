@@ -6,7 +6,7 @@ import java.util.List;
 import org.example.exception.InvalidInputException;
 import org.example.exception.ProductNotFoundException;
 import org.example.exception.UnauthorizedActionException;
-import org.example.model.entity.Category;
+import org.example.model.vo.Category;
 import org.example.model.entity.Order;
 import org.example.model.entity.Product;
 import org.example.model.enums.OrderStatus;

@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import org.example.exception.InsufficientStockException;
 import org.example.exception.InvalidInputException;
 import org.example.model.entity.Cart;
-import org.example.model.entity.Category;
+import org.example.model.vo.Category;
 import org.example.model.entity.Product;
 import org.example.model.vo.Money;
 import org.example.model.vo.Quantity;

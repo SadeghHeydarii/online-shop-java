@@ -23,6 +23,7 @@ import org.example.model.vo.Address;
 import org.example.model.vo.CartItem;
 import org.example.model.vo.Money;
 import org.example.model.vo.OrderItem;
+import org.example.model.vo.PaymentTransaction;
 import org.example.model.vo.Quantity;
 import org.example.service.CartService;
 import org.example.service.OrderService;
@@ -467,6 +468,24 @@ public class CustomerMenu {
         io.println("Discount:    -" + o.getDiscountAmount().amount() + " " + o.getDiscountAmount().currency());
         io.println("Shipping:    +" + o.getShippingFee().amount() + " " + o.getShippingFee().currency());
         io.println("TOTAL:        " + o.getPayableAmount().amount() + " " + o.getPayableAmount().currency());
+
+        if (!o.getTransactions().isEmpty()) {
+            io.println();
+            io.println("Payment Transactions:");
+            List<String> txHeaders = List.of("Txn ID", "Method", "Status", "Amount", "Reference", "Timestamp");
+            List<List<String>> txRows = new ArrayList<>();
+            for (PaymentTransaction tx : o.getTransactions()) {
+                txRows.add(List.of(
+                        tx.transactionId(),
+                        tx.method().name(),
+                        tx.status().name(),
+                        tx.amount().amount() + " " + tx.amount().currency(),
+                        tx.referenceCode() != null ? tx.referenceCode() : "-",
+                        tx.timestamp().toString()
+                ));
+            }
+            io.printTable(txHeaders, txRows);
+        }
     }
 
     // =========================================================================

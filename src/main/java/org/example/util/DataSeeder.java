@@ -5,7 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Objects;
-import org.example.model.entity.Category;
+import org.example.model.vo.Category;
 import org.example.model.entity.User;
 import org.example.model.enums.UserRole;
 import org.example.model.vo.Address;

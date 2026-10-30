@@ -20,11 +20,13 @@ import org.example.model.entity.Product;
 import org.example.model.entity.User;
 import org.example.model.enums.OrderStatus;
 import org.example.model.enums.PaymentMethod;
+import org.example.model.enums.PaymentStatus;
 import org.example.model.vo.Address;
 import org.example.model.vo.CartItem;
 import org.example.model.vo.Coupon;
 import org.example.model.vo.Money;
 import org.example.model.vo.OrderItem;
+import org.example.model.vo.PaymentTransaction;
 
 /**
  * Application service coordinating the end-to-end checkout workflow, discount coupons,
@@ -254,8 +256,21 @@ public class OrderService {
                 }
             }
 
+            LocalDateTime paymentTime = LocalDateTime.now();
+            String refCode = "REF-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+            PaymentTransaction tx = new PaymentTransaction(
+                    "txn-" + UUID.randomUUID().toString(),
+                    order.getOrderId(),
+                    order.getPayableAmount(),
+                    method,
+                    PaymentStatus.SUCCESS,
+                    paymentTime,
+                    refCode
+            );
+            order.recordTransaction(tx);
+
             // Mark order as PAID
-            order.markAsPaid(LocalDateTime.now());
+            order.markAsPaid(paymentTime);
 
             // Clear the user's shopping cart
             if (cartService != null) {
@@ -263,6 +278,17 @@ public class OrderService {
             }
             return true;
         } else {
+            PaymentTransaction failedTx = new PaymentTransaction(
+                    "txn-" + UUID.randomUUID().toString(),
+                    order.getOrderId(),
+                    order.getPayableAmount(),
+                    method,
+                    PaymentStatus.FAILED,
+                    LocalDateTime.now(),
+                    null
+            );
+            order.recordTransaction(failedTx);
+
             // Mark payment as failed; inventory and cart remain intact for retry
             order.markAsPaymentFailed();
             return false;

@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.example.cli.ConsoleIO;
-import org.example.model.entity.Category;
+import org.example.model.vo.Category;
 import org.example.model.entity.Order;
 import org.example.model.entity.Product;
 import org.example.model.entity.User;

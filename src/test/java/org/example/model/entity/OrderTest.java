@@ -5,10 +5,13 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import org.example.model.enums.OrderStatus;
+import org.example.model.enums.PaymentMethod;
+import org.example.model.enums.PaymentStatus;
 import org.example.model.vo.Address;
 import org.example.model.vo.Money;
 import org.example.model.vo.OrderItem;
 import org.example.model.vo.Quantity;
+import org.example.model.vo.PaymentTransaction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -306,6 +309,48 @@ class OrderTest {
         // Mutating external sampleItems after creation does not affect order.getItems()
         sampleItems.add(extra);
         assertEquals(2, order.getItems().size());
+    }
+
+    @Test
+    @DisplayName("Initial transactions list is empty and defensively unmodifiable")
+    void testTransactionsInitialAndUnmodifiable() {
+        assertTrue(order.getTransactions().isEmpty());
+
+        PaymentTransaction tx = new PaymentTransaction(
+                "txn-1", order.getOrderId(), order.getPayableAmount(),
+                PaymentMethod.ONLINE_GATEWAY, PaymentStatus.SUCCESS, LocalDateTime.now(), "REF-1"
+        );
+        assertThrows(UnsupportedOperationException.class, () -> order.getTransactions().add(tx));
+    }
+
+    @Test
+    @DisplayName("recordTransaction successfully adds transactions and validates inputs")
+    void testRecordTransaction() {
+        PaymentTransaction failedTx = new PaymentTransaction(
+                "txn-1", order.getOrderId(), order.getPayableAmount(),
+                PaymentMethod.ONLINE_GATEWAY, PaymentStatus.FAILED, LocalDateTime.now(), null
+        );
+        order.recordTransaction(failedTx);
+        assertEquals(1, order.getTransactions().size());
+        assertEquals("txn-1", order.getTransactions().get(0).transactionId());
+        assertEquals(PaymentStatus.FAILED, order.getTransactions().get(0).status());
+
+        PaymentTransaction successTx = new PaymentTransaction(
+                "txn-2", order.getOrderId(), order.getPayableAmount(),
+                PaymentMethod.WALLET, PaymentStatus.SUCCESS, LocalDateTime.now(), "REF-2"
+        );
+        order.recordTransaction(successTx);
+        assertEquals(2, order.getTransactions().size());
+        assertEquals("txn-2", order.getTransactions().get(1).transactionId());
+        assertEquals(PaymentStatus.SUCCESS, order.getTransactions().get(1).status());
+
+        assertThrows(IllegalArgumentException.class, () -> order.recordTransaction(null));
+
+        PaymentTransaction mismatchTx = new PaymentTransaction(
+                "txn-3", "ord-different", order.getPayableAmount(),
+                PaymentMethod.WALLET, PaymentStatus.SUCCESS, LocalDateTime.now(), "REF-3"
+        );
+        assertThrows(IllegalArgumentException.class, () -> order.recordTransaction(mismatchTx));
     }
 
     @Test

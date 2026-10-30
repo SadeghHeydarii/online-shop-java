@@ -1,7 +1,7 @@
-package org.example.model.entity;
+package org.example.model.vo;
 
 /**
- * Immutable domain concept representing a product classification category.
+ * Immutable value object representing a product classification category.
  *
  * <p>Abstraction Function:
  * AF(c) = a product catalog category identified by {@code c.id}, named {@code c.name},

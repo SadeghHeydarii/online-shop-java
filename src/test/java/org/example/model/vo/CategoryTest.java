@@ -1,4 +1,4 @@
-package org.example.model.entity;
+package org.example.model.vo;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -9,7 +9,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("Category Record Tests")
+@DisplayName("Category Value Object Record Tests")
 class CategoryTest {
 
     @Nested

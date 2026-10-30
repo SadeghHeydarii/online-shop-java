@@ -9,12 +9,14 @@ import org.example.exception.InvalidCouponException;
 import org.example.exception.InvalidInputException;
 import org.example.exception.InvalidOrderStateException;
 import org.example.exception.OrderNotFoundException;
-import org.example.model.entity.Category;
+import org.example.model.vo.Category;
 import org.example.model.entity.Order;
 import org.example.model.entity.Product;
 import org.example.model.entity.User;
 import org.example.model.enums.OrderStatus;
 import org.example.model.enums.PaymentMethod;
+import org.example.model.enums.PaymentStatus;
+import org.example.model.vo.PaymentTransaction;
 import org.example.model.enums.UserRole;
 import org.example.model.vo.Address;
 import org.example.model.vo.Coupon;
@@ -209,6 +211,14 @@ class OrderServiceTest {
             Order paidOrder = orderService.getOrderDetails(pendingOrder.getOrderId());
             assertEquals(OrderStatus.PAID, paidOrder.getStatus());
             assertTrue(paidOrder.getPaidAt().isPresent());
+            assertEquals(1, paidOrder.getTransactions().size());
+            PaymentTransaction tx = paidOrder.getTransactions().get(0);
+            assertEquals(pendingOrder.getOrderId(), tx.orderId());
+            assertEquals(PaymentMethod.ONLINE_GATEWAY, tx.method());
+            assertEquals(PaymentStatus.SUCCESS, tx.status());
+            assertEquals(paidOrder.getPayableAmount(), tx.amount());
+            assertNotNull(tx.referenceCode());
+            assertNotNull(tx.timestamp());
 
             // Stock deducted (10 - 2 = 8)
             assertEquals(originalStock - 2, laptop.getAvailableStock());
@@ -228,6 +238,13 @@ class OrderServiceTest {
             Order failedOrder = orderService.getOrderDetails(pendingOrder.getOrderId());
             assertEquals(OrderStatus.PAYMENT_FAILED, failedOrder.getStatus());
             assertTrue(failedOrder.getPaidAt().isEmpty());
+            assertEquals(1, failedOrder.getTransactions().size());
+            PaymentTransaction tx = failedOrder.getTransactions().get(0);
+            assertEquals(pendingOrder.getOrderId(), tx.orderId());
+            assertEquals(PaymentMethod.ONLINE_GATEWAY, tx.method());
+            assertEquals(PaymentStatus.FAILED, tx.status());
+            assertEquals(failedOrder.getPayableAmount(), tx.amount());
+            assertNull(tx.referenceCode());
 
             // Stock NOT deducted
             assertEquals(originalStock, laptop.getAvailableStock());
@@ -245,6 +262,9 @@ class OrderServiceTest {
             boolean retrySuccess = orderService.processPayment(pendingOrder.getOrderId(), PaymentMethod.ONLINE_GATEWAY, true);
             assertTrue(retrySuccess);
             assertEquals(OrderStatus.PAID, pendingOrder.getStatus());
+            assertEquals(2, pendingOrder.getTransactions().size());
+            assertEquals(PaymentStatus.FAILED, pendingOrder.getTransactions().get(0).status());
+            assertEquals(PaymentStatus.SUCCESS, pendingOrder.getTransactions().get(1).status());
         }
 
         @Test

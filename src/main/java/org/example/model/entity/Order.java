@@ -7,7 +7,9 @@ import java.util.Optional;
 import org.example.model.enums.OrderStatus;
 import org.example.model.vo.Address;
 import org.example.model.vo.Money;
+import java.util.ArrayList;
 import org.example.model.vo.OrderItem;
+import org.example.model.vo.PaymentTransaction;
 
 /**
  * Represents an immutable customer purchase order entity and aggregate root.
@@ -61,6 +63,7 @@ public class Order {
     private OrderStatus status;
     private final LocalDateTime createdAt;
     private LocalDateTime paidAt;
+    private final List<PaymentTransaction> transactions;
 
     /**
      * Constructs a new {@code Order} entity in {@link OrderStatus#PENDING} status.
@@ -139,6 +142,7 @@ public class Order {
         this.status = OrderStatus.PENDING;
         this.createdAt = createdAt;
         this.paidAt = null;
+        this.transactions = new ArrayList<>();
         checkRep();
     }
 
@@ -168,6 +172,11 @@ public class Order {
 
         assert status != null : "status cannot be null";
         assert createdAt != null : "createdAt cannot be null";
+        assert transactions != null : "transactions list cannot be null";
+        for (PaymentTransaction tx : transactions) {
+            assert tx != null : "transaction in transactions list cannot be null";
+            assert orderId.equals(tx.orderId()) : "transaction orderId mismatch";
+        }
 
         if (status == OrderStatus.PAID
                 || status == OrderStatus.PROCESSING
@@ -274,6 +283,33 @@ public class Order {
      */
     public Optional<LocalDateTime> getPaidAt() {
         return Optional.ofNullable(paidAt);
+    }
+
+    /**
+     * Returns an unmodifiable snapshot list of payment transactions recorded for this order.
+     *
+     * @return unmodifiable list of payment transactions
+     */
+    public List<PaymentTransaction> getTransactions() {
+        return List.copyOf(transactions);
+    }
+
+    /**
+     * Records a payment transaction associated with this order.
+     *
+     * @param transaction the payment transaction to record (must not be null and must match this order's ID)
+     * @throws IllegalArgumentException if transaction is null or does not match this order's ID
+     */
+    public void recordTransaction(PaymentTransaction transaction) {
+        if (transaction == null) {
+            throw new IllegalArgumentException("Transaction cannot be null");
+        }
+        if (!transaction.orderId().equals(this.orderId)) {
+            throw new IllegalArgumentException("Transaction order ID " + transaction.orderId()
+                    + " does not match order ID " + this.orderId);
+        }
+        this.transactions.add(transaction);
+        checkRep();
     }
 
     /**

@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.example.cli.ConsoleIO;
-import org.example.model.entity.Category;
+import org.example.model.vo.Category;
 import org.example.model.entity.Order;
 import org.example.model.entity.Product;
 import org.example.model.entity.User;

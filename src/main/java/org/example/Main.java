@@ -9,7 +9,7 @@ import org.example.cli.menu.AdminMenu;
 import org.example.cli.menu.CustomerMenu;
 import org.example.cli.menu.GuestMenu;
 import org.example.model.entity.Cart;
-import org.example.model.entity.Category;
+import org.example.model.vo.Category;
 import org.example.model.entity.Order;
 import org.example.model.entity.Product;
 import org.example.model.entity.User;
