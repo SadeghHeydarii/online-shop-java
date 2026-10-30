@@ -37,10 +37,20 @@ class CartTest {
     @DisplayName("Cart constructor initializes empty cart with valid identifier")
     void testValidCartCreation() {
         assertEquals("cart-usr-1", cart.getCartId());
+        assertEquals("cart-usr-1", cart.getUserId());
         assertTrue(cart.isEmpty());
         assertEquals(0, cart.getItems().size());
         assertEquals(0, cart.quantityOf("prod-1"));
         assertEquals(Money.ZERO, cart.calculateSubtotal());
+    }
+
+    @Test
+    @DisplayName("Two-argument Cart constructor initializes cart with distinct cartId and userId")
+    void testTwoArgumentConstructor() {
+        Cart customCart = new Cart("cart-100", "user-42");
+        assertEquals("cart-100", customCart.getCartId());
+        assertEquals("user-42", customCart.getUserId());
+        assertTrue(customCart.isEmpty());
     }
 
     @ParameterizedTest
@@ -49,6 +59,14 @@ class CartTest {
     @DisplayName("Cart constructor rejects null or blank cartId")
     void testInvalidCartId(String invalidId) {
         assertThrows(IllegalArgumentException.class, () -> new Cart(invalidId));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" ", "\t", "\n"})
+    @DisplayName("Cart constructor rejects null or blank userId")
+    void testInvalidUserId(String invalidUserId) {
+        assertThrows(IllegalArgumentException.class, () -> new Cart("cart-1", invalidUserId));
     }
 
     @Test
@@ -214,5 +232,6 @@ class CartTest {
         String str = cart.toString();
         assertTrue(str.contains("cart-usr-1"));
         assertTrue(str.contains("itemCount=1"));
+        assertTrue(str.contains("userId="));
     }
 }

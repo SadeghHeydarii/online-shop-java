@@ -1,6 +1,8 @@
 package org.example.service;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 import org.example.exception.InsufficientStockException;
 import org.example.exception.InvalidInputException;
 import org.example.model.entity.Cart;
@@ -57,6 +59,7 @@ class CartServiceTest {
             assertNotNull(cart1);
             assertTrue(cart1.isEmpty());
             assertEquals("user-1", cart1.getCartId());
+            assertEquals("user-1", cart1.getUserId());
 
             Cart cart2 = cartService.getCart("user-1");
             assertSame(cart1, cart2);
@@ -187,6 +190,83 @@ class CartServiceTest {
         void clearCartSuccess() {
             cartService.clearCart("user-1");
             assertTrue(cartService.getCart("user-1").isEmpty());
+        }
+    }
+
+    @Nested
+    @DisplayName("Multi-User Cart Isolation Tests")
+    class MultiUserIsolationTests {
+
+        @Test
+        @DisplayName("Distinct users receive independent cart instances with correct owner user ID")
+        void usersReceiveDistinctIndependentCarts() {
+            Cart cartA = cartService.getCart("user-alice");
+            Cart cartB = cartService.getCart("user-bob");
+
+            assertNotNull(cartA);
+            assertNotNull(cartB);
+            assertNotSame(cartA, cartB);
+            assertEquals("user-alice", cartA.getUserId());
+            assertEquals("user-bob", cartB.getUserId());
+            assertNotEquals(cartA.getCartId(), cartB.getCartId());
+        }
+
+        @Test
+        @DisplayName("Modifying user A's cart does not affect user B's cart")
+        void modificationsToCartADoNotAffectCartB() {
+            Cart cartBob = cartService.getCart("user-bob");
+            assertTrue(cartBob.isEmpty());
+
+            cartService.addItem("user-alice", activeProduct.getId(), new Quantity(3));
+
+            Cart cartAlice = cartService.getCart("user-alice");
+            assertEquals(1, cartAlice.getItems().size());
+            assertEquals(3, cartAlice.quantityOf(activeProduct.getId()));
+
+            // User B's cart remains completely untouched and isolated
+            Cart reloadedBob = cartService.getCart("user-bob");
+            assertTrue(reloadedBob.isEmpty());
+            assertEquals(0, reloadedBob.quantityOf(activeProduct.getId()));
+        }
+
+        @Test
+        @DisplayName("Users can independently add different quantities of the same product")
+        void crossUserCartModificationIsolation() {
+            cartService.addItem("user-alice", activeProduct.getId(), new Quantity(2));
+            cartService.addItem("user-bob", activeProduct.getId(), new Quantity(5));
+
+            assertEquals(2, cartService.getCart("user-alice").quantityOf(activeProduct.getId()));
+            assertEquals(5, cartService.getCart("user-bob").quantityOf(activeProduct.getId()));
+
+            cartService.removeItem("user-alice", activeProduct.getId());
+            assertTrue(cartService.getCart("user-alice").isEmpty());
+            assertEquals(5, cartService.getCart("user-bob").quantityOf(activeProduct.getId()));
+        }
+
+        @Test
+        @DisplayName("Subsequent retrieval preserves cart identity without creating new carts")
+        void subsequentRetrievalPreservesIdentityWithoutCreatingNewCarts() {
+            Cart firstRetrieval = cartService.getCart("user-alice");
+            cartService.addItem("user-alice", activeProduct.getId(), new Quantity(1));
+
+            Cart secondRetrieval = cartService.getCart("user-alice");
+            assertSame(firstRetrieval, secondRetrieval);
+            assertEquals(1, secondRetrieval.quantityOf(activeProduct.getId()));
+        }
+
+        @Test
+        @DisplayName("Mismatched cart owner in storage throws IllegalStateException")
+        void mismatchedCartOwnerInStoreThrowsIllegalStateException() {
+            Map<String, Cart> tamperedStore = new HashMap<>();
+            Cart corruptedCart = new Cart("cart-123", "user-different");
+            tamperedStore.put("user-target", corruptedCart);
+
+            CartService customService = new CartService(tamperedStore, productService);
+
+            IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
+                    customService.getCart("user-target")
+            );
+            assertTrue(ex.getMessage().contains("Cart ownership invariant violated"));
         }
     }
 }

@@ -55,7 +55,13 @@ public class CartService {
         if (userId == null || userId.isBlank()) {
             throw new InvalidInputException("User ID cannot be null or blank");
         }
-        return cartStore.computeIfAbsent(userId.trim(), Cart::new);
+        String normalizedUserId = userId.trim();
+        Cart cart = cartStore.computeIfAbsent(normalizedUserId, uid -> new Cart(uid, uid));
+        if (!normalizedUserId.equals(cart.getUserId())) {
+            throw new IllegalStateException("Cart ownership invariant violated: expected owner "
+                    + normalizedUserId + " but found " + cart.getUserId());
+        }
+        return cart;
     }
 
     /**

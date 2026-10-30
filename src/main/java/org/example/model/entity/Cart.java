@@ -12,17 +12,20 @@ import org.example.model.vo.Quantity;
  * Represents a customer's shopping cart entity and aggregate root.
  *
  * <p>A shopping cart holds line items ({@link CartItem}) accumulated by a customer
- * during a shopping session, keyed by product identifier. It provides domain operations
- * to add items, update quantities, remove items, clear contents, compute total value,
- * and query current line count and emptiness.
+ * during a shopping session, keyed by product identifier. It embodies the domain association
+ * {@code User "1" --> "0..1" Cart : owns}, recording the owning customer's identifier
+ * ({@code userId}). It provides domain operations to add items, update quantities, remove
+ * items, clear contents, compute total value, and query line count and emptiness.
  *
  * <p><b>Abstraction Function (AF):</b>
- * AF(cartId, items) = A mutable shopping cart identified by {@code cartId} containing
- * the active collection of product line items mapped in {@code items}.
+ * AF(cartId, userId, items) = A mutable shopping cart identified by {@code cartId}
+ * belonging to customer {@code userId}, containing the active collection of product line
+ * items mapped in {@code items}.
  *
  * <p><b>Representation Invariant (RI):</b>
  * <ul>
  *   <li>{@code cartId != null && !cartId.isBlank()}</li>
+ *   <li>{@code userId != null && !userId.isBlank()}</li>
  *   <li>{@code items != null}</li>
  *   <li>For every entry in {@code items}: key and value are non-null, and
  *       {@code entry.getKey().equals(entry.getValue().productId())}</li>
@@ -37,21 +40,37 @@ import org.example.model.vo.Quantity;
 public class Cart {
 
     private final String cartId;
+    private final String userId;
     private final Map<String, CartItem> items;
 
     /**
-     * Constructs a new empty {@code Cart} entity with the specified identifier.
+     * Constructs a new empty {@code Cart} entity with explicit cart and owner identifiers.
      *
-     * @param cartId the unique identifier of the cart (typically identical to the customer's userId)
-     * @throws IllegalArgumentException if cartId is null or blank
+     * @param cartId the unique identifier of the cart
+     * @param userId the unique identifier of the customer who owns this cart
+     * @throws IllegalArgumentException if cartId or userId is null or blank
      */
-    public Cart(String cartId) {
+    public Cart(String cartId, String userId) {
         if (cartId == null || cartId.isBlank()) {
             throw new IllegalArgumentException("Cart ID cannot be null or blank");
         }
-        this.cartId = cartId;
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("User ID cannot be null or blank");
+        }
+        this.cartId = cartId.trim();
+        this.userId = userId.trim();
         this.items = new LinkedHashMap<>();
         checkRep();
+    }
+
+    /**
+     * Constructs a new empty {@code Cart} entity where the cart identifier defaults to the user identifier.
+     *
+     * @param userId the unique identifier of the owning customer
+     * @throws IllegalArgumentException if userId is null or blank
+     */
+    public Cart(String userId) {
+        this(userId, userId);
     }
 
     /**
@@ -59,6 +78,7 @@ public class Cart {
      */
     private void checkRep() {
         assert cartId != null && !cartId.isBlank() : "cartId cannot be null or blank";
+        assert userId != null && !userId.isBlank() : "userId cannot be null or blank";
         assert items != null : "items map cannot be null";
         for (Map.Entry<String, CartItem> entry : items.entrySet()) {
             assert entry.getKey() != null : "null map key in cart items";
@@ -78,6 +98,15 @@ public class Cart {
      */
     public String getCartId() {
         return cartId;
+    }
+
+    /**
+     * Returns the unique identifier of the customer who owns this cart.
+     *
+     * @return owning customer user identifier
+     */
+    public String getUserId() {
+        return userId;
     }
 
     /**
@@ -237,6 +266,7 @@ public class Cart {
     @Override
     public String toString() {
         return "Cart[cartId=" + cartId
+                + ", userId=" + userId
                 + ", itemCount=" + items.size()
                 + ", subtotal=" + calculateSubtotal()
                 + "]";
