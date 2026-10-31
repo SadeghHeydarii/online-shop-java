@@ -16,16 +16,19 @@ import org.example.model.vo.Review;
 
 /**
  * Application service managing product ratings and customer reviews.
- * Enforces verified-purchase constraints and synchronizes aggregate rating metrics on products.
+ * Enforces verified-purchase constraints, character limits, and synchronizes aggregate rating metrics on products.
  *
  * <p>Specification compliance:
  * <ul>
  *   <li>Conforms strictly to Section 5.6 and Figure 2 of domain-model-specification.</li>
  *   <li>Requires users to have purchased the product in a paid or delivered order before leaving a review.</li>
+ *   <li>Enforces comment text length boundaries (1 to {@value #MAX_REVIEW_LENGTH} characters).</li>
  *   <li>Automatically updates the product's running rating statistics via {@link Product#updateRatingStats(int)}.</li>
  * </ul>
  */
 public class ReviewService {
+
+    public static final int MAX_REVIEW_LENGTH = 2000;
 
     private final Map<String, List<Review>> productReviewsStore;
     private final OrderService orderService;
@@ -61,7 +64,8 @@ public class ReviewService {
      *
      * <p>Contract:
      * <ul>
-     *   <li>REQUIRES: rating between 1 and 5, comment non-blank, userId has purchased product in a paid/delivered order.</li>
+     *   <li>REQUIRES: rating between 1 and 5, comment non-blank and &lt;= {@value #MAX_REVIEW_LENGTH} characters,
+     *       userId has purchased product in a paid/delivered order.</li>
      *   <li>MODIFIES: productReviewsStore, product</li>
      *   <li>EFFECTS: Creates Review, appends to store, updates product rating statistics;
      *                throws {@link UnauthorizedActionException} if user did not purchase the product.</li>
@@ -71,8 +75,8 @@ public class ReviewService {
      * @param authorName display name of the reviewer
      * @param productId  unique identifier of the product being reviewed
      * @param rating     integer star rating from 1 to 5 inclusive
-     * @param comment    written feedback text (non-blank)
-     * @throws InvalidInputException       if any argument violates basic input validation
+     * @param comment    written feedback text (non-blank, up to {@value #MAX_REVIEW_LENGTH} characters)
+     * @throws InvalidInputException       if any argument violates input validation or comment length
      * @throws UnauthorizedActionException if the user has not purchased the product in a qualified order
      */
     public void addReview(String userId, String authorName, String productId, int rating, String comment) {
@@ -88,8 +92,8 @@ public class ReviewService {
         if (rating < 1 || rating > 5) {
             throw new InvalidInputException("Rating must be between 1 and 5 inclusive, got: " + rating);
         }
-        if (comment == null || comment.isBlank()) {
-            throw new InvalidInputException("Review comment cannot be null or blank");
+        if (comment == null || comment.isBlank() || comment.length() > MAX_REVIEW_LENGTH) {
+            throw new InvalidInputException("Review text must contain 1 to " + MAX_REVIEW_LENGTH + " characters");
         }
 
         String targetUserId = userId.trim();

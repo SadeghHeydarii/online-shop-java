@@ -2,15 +2,17 @@ package org.example.service;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.example.exception.CategoryNotFoundException;
+import org.example.exception.InsufficientStockException;
 import org.example.exception.InvalidInputException;
 import org.example.exception.ProductNotFoundException;
-import org.example.model.vo.Category;
 import org.example.model.entity.Product;
+import org.example.model.vo.Category;
 import org.example.model.vo.Money;
 import org.example.model.vo.Quantity;
 
@@ -21,11 +23,13 @@ import org.example.model.vo.Quantity;
  * <p>Specification compliance:
  * <ul>
  *   <li>Conforms strictly to Section 5.3 and Figure 2 of domain-model-specification.</li>
- *   <li>Case A: Implements the exact 8 approved public methods without inventing unapproved APIs.</li>
+ *   <li>Supports catalog browsing, active category filtering, image URL management, and stock validation.</li>
  *   <li>In-memory data structures managed via {@link ConcurrentHashMap}.</li>
  * </ul>
  */
 public class ProductService {
+
+    public static final int MAX_SEARCH_LENGTH = 100;
 
     private final Map<String, Product> productStore;
     private final Map<String, Category> categoryStore;
@@ -49,13 +53,25 @@ public class ProductService {
     }
 
     /**
-     * Retrieves all published, active products in the catalog.
+     * Retrieves all published, active products in active categories, sorted deterministically by name and ID.
      *
-     * @return unmodifiable list of active products
+     * @return unmodifiable list of visible active products
      */
     public List<Product> getAllActiveProducts() {
         return productStore.values().stream()
-                .filter(Product::isActive)
+                .filter(this::isVisible)
+                .sorted(Comparator.comparing(Product::getName).thenComparing(Product::getId))
+                .toList();
+    }
+
+    /**
+     * Retrieves all products in the catalog regardless of active status (for administrative management).
+     *
+     * @return list of all catalog products
+     */
+    public List<Product> getAllProducts() {
+        return productStore.values().stream()
+                .sorted(Comparator.comparing(Product::getName).thenComparing(Product::getId))
                 .toList();
     }
 
@@ -79,24 +95,20 @@ public class ProductService {
     }
 
     /**
-     * Performs a case-insensitive search across names and descriptions of active products.
+     * Performs a case-insensitive search across names and descriptions of visible active products.
      *
-     * @param query the search keyword or phrase (non-null)
+     * @param query the search keyword or phrase (up to {@value #MAX_SEARCH_LENGTH} characters)
      * @return list of matching active products
-     * @throws InvalidInputException if {@code query} is null
+     * @throws InvalidInputException if {@code query} is null or exceeds maximum allowed length
      */
     public List<Product> searchProducts(String query) {
-        if (query == null) {
-            throw new InvalidInputException("Search query cannot be null");
+        if (query == null || query.length() > MAX_SEARCH_LENGTH) {
+            throw new InvalidInputException("Search text must be at most " + MAX_SEARCH_LENGTH + " characters");
         }
-        String term = query.trim().toLowerCase();
-        if (term.isEmpty()) {
-            return getAllActiveProducts();
-        }
-        return productStore.values().stream()
-                .filter(Product::isActive)
-                .filter(p -> p.getName().toLowerCase().contains(term)
-                        || p.getDescription().toLowerCase().contains(term))
+        String term = query.trim().toLowerCase(Locale.ROOT);
+        return getAllActiveProducts().stream()
+                .filter(product -> product.getName().toLowerCase(Locale.ROOT).contains(term)
+                        || product.getDescription().toLowerCase(Locale.ROOT).contains(term))
                 .toList();
     }
 
@@ -106,7 +118,7 @@ public class ProductService {
      * @param categoryId optional category filter (null, blank, or "ALL" ignores category filtering)
      * @param minPrice   optional minimum inclusive price threshold (null ignores lower bound)
      * @param maxPrice   optional maximum inclusive price threshold (null ignores upper bound)
-     * @param sortBy     sort criterion: "price_asc", "price_desc", "rating", or null/empty
+     * @param sortBy     sort criterion: "price_asc", "price_desc", "rating", "newest", "popular", or null/empty
      * @return filtered and sorted list of active products
      * @throws InvalidInputException if minPrice exceeds maxPrice or if sortBy option is unrecognized
      */
@@ -115,50 +127,47 @@ public class ProductService {
             throw new InvalidInputException("Minimum price (" + minPrice + ") cannot exceed maximum price (" + maxPrice + ")");
         }
 
-        Comparator<Product> comparator = null;
+        Comparator<Product> comparator = Comparator.comparing(Product::getName);
         if (sortBy != null && !sortBy.isBlank()) {
-            String normSort = sortBy.trim().toLowerCase();
-            comparator = switch (normSort) {
-                case "price_asc" -> Comparator.comparing(p -> p.getPrice().amount());
-                case "price_desc" -> Comparator.comparing((Product p) -> p.getPrice().amount()).reversed();
+            comparator = switch (sortBy.trim().toLowerCase(Locale.ROOT)) {
+                case "price_asc" -> Comparator.comparing(product -> product.getPrice().amount());
+                case "price_desc" -> Comparator.comparing((Product product) -> product.getPrice().amount()).reversed();
                 case "rating" -> Comparator.comparingDouble(Product::getAverageRating).reversed();
-                default -> throw new InvalidInputException("Unrecognized sort option: '" + sortBy + "'. Valid options: price_asc, price_desc, rating");
+                case "newest" -> Comparator.comparing(Product::getCreatedAt).reversed();
+                case "popular" -> Comparator.comparingLong(Product::getSoldCount).reversed();
+                default -> throw new InvalidInputException("Unrecognized sort option: '" + sortBy
+                        + "'. Valid options: price_asc, price_desc, rating, newest, popular");
             };
         }
 
-        var stream = productStore.values().stream()
-                .filter(Product::isActive);
+        var stream = getAllActiveProducts().stream();
 
-        if (categoryId != null && !categoryId.isBlank() && !categoryId.equalsIgnoreCase("ALL")) {
-            String targetCatId = categoryId.trim();
-            stream = stream.filter(p -> p.getCategoryId().equals(targetCatId));
+        if (categoryId != null && !categoryId.isBlank() && !categoryId.trim().equalsIgnoreCase("ALL")) {
+            Category category = requireActiveCategory(categoryId);
+            stream = stream.filter(product -> product.getCategoryId().equals(category.id()));
         }
 
         if (minPrice != null) {
-            stream = stream.filter(p -> !p.getPrice().isLessThan(minPrice));
+            stream = stream.filter(product -> !product.getPrice().isLessThan(minPrice));
         }
 
         if (maxPrice != null) {
-            stream = stream.filter(p -> !maxPrice.isLessThan(p.getPrice()));
+            stream = stream.filter(product -> !maxPrice.isLessThan(product.getPrice()));
         }
 
-        if (comparator != null) {
-            stream = stream.sorted(comparator);
-        }
-
-        return stream.toList();
+        return stream.sorted(comparator.thenComparing(Product::getId)).toList();
     }
 
     /**
-     * Registers a new product into the catalog under an existing category.
+     * Registers a new product into the catalog under an active existing category.
      *
      * @param name        the product display name
      * @param desc        the detailed product description
      * @param price       the monetary price of the product
      * @param stock       initial inventory count (non-negative)
-     * @param categoryId  the category to assign the product to (must exist in categoryStore)
+     * @param categoryId  the category to assign the product to (must exist and be active)
      * @throws InvalidInputException     if input arguments violate domain invariants
-     * @throws CategoryNotFoundException if categoryId does not exist in the categoryStore
+     * @throws CategoryNotFoundException if categoryId does not exist or is inactive
      */
     public void addProduct(String name, String desc, Money price, int stock, String categoryId) {
         if (name == null || name.isBlank()) {
@@ -181,8 +190,8 @@ public class ProductService {
         }
 
         String targetCatId = categoryId.trim();
-        if (!categoryStore.containsKey(targetCatId)) {
-            throw new CategoryNotFoundException("Category with ID '" + targetCatId + "' does not exist");
+        if (!categoryStore.containsKey(targetCatId) || !categoryStore.get(targetCatId).active()) {
+            throw new CategoryNotFoundException("Category with ID '" + targetCatId + "' does not exist or is inactive");
         }
 
         String productId = "prod-" + UUID.randomUUID().toString();
@@ -197,10 +206,10 @@ public class ProductService {
      * @param name       updated product name
      * @param desc       updated product description
      * @param price      updated monetary price
-     * @param categoryId updated category identifier (must exist in categoryStore)
+     * @param categoryId updated category identifier (must exist and be active)
      * @throws InvalidInputException     if any parameter is invalid
      * @throws ProductNotFoundException  if product does not exist
-     * @throws CategoryNotFoundException if categoryId does not exist
+     * @throws CategoryNotFoundException if categoryId does not exist or is inactive
      */
     public void updateProduct(String productId, String name, String desc, Money price, String categoryId) {
         Product product = getProductById(productId);
@@ -209,8 +218,8 @@ public class ProductService {
             throw new InvalidInputException("Category ID cannot be null or blank");
         }
         String targetCatId = categoryId.trim();
-        if (!categoryStore.containsKey(targetCatId)) {
-            throw new CategoryNotFoundException("Category with ID '" + targetCatId + "' does not exist");
+        if (!categoryStore.containsKey(targetCatId) || !categoryStore.get(targetCatId).active()) {
+            throw new CategoryNotFoundException("Category with ID '" + targetCatId + "' does not exist or is inactive");
         }
 
         product.updateDetails(name, desc, price, targetCatId);
@@ -245,6 +254,77 @@ public class ProductService {
         } else if (delta < 0) {
             product.deductStock(new Quantity(-delta));
         }
+    }
+
+    /**
+     * Returns all active categories sorted alphabetically by name.
+     *
+     * @return list of active categories
+     */
+    public List<Category> getActiveCategories() {
+        return categoryStore.values().stream()
+                .filter(Category::active)
+                .sorted(Comparator.comparing(Category::name).thenComparing(Category::id))
+                .toList();
+    }
+
+    /**
+     * Retrieves all active products belonging to the specified active category.
+     *
+     * @param categoryId the category identifier
+     * @return list of active products in the category
+     */
+    public List<Product> getProductsByCategory(String categoryId) {
+        Category category = requireActiveCategory(categoryId);
+        return getAllActiveProducts().stream()
+                .filter(product -> product.getCategoryId().equals(category.id()))
+                .toList();
+    }
+
+    /**
+     * Updates the registered image URLs for a product.
+     *
+     * @param productId the identifier of the product
+     * @param imageUrls the list of HTTP/HTTPS image URLs
+     */
+    public void setProductImages(String productId, List<String> imageUrls) {
+        getProductById(productId).setImageUrls(imageUrls);
+    }
+
+    /**
+     * Validates that the requested product exists, is visible in an active category, and has sufficient stock.
+     *
+     * @param productId the identifier of the product
+     * @param quantity  the required quantity
+     * @return the available {@link Product}
+     * @throws InvalidInputException      if the product is inactive or unavailable
+     * @throws InsufficientStockException if available stock is less than required quantity
+     */
+    public Product requireAvailableProduct(String productId, Quantity quantity) {
+        Product product = getProductById(productId);
+        if (!isVisible(product)) {
+            throw new InvalidInputException("Product is inactive or its category is unavailable: " + productId);
+        }
+        if (!product.isAvailable(quantity)) {
+            throw new InsufficientStockException("Insufficient stock for product '" + product.getName() + "'");
+        }
+        return product;
+    }
+
+    private boolean isVisible(Product product) {
+        Category category = categoryStore.get(product.getCategoryId());
+        return product.isActive() && category != null && category.active();
+    }
+
+    private Category requireActiveCategory(String categoryId) {
+        if (categoryId == null || categoryId.isBlank()) {
+            throw new InvalidInputException("Category ID cannot be blank");
+        }
+        Category category = categoryStore.get(categoryId.trim());
+        if (category == null || !category.active()) {
+            throw new CategoryNotFoundException("Active category not found: " + categoryId);
+        }
+        return category;
     }
 
     // =========================================================================
