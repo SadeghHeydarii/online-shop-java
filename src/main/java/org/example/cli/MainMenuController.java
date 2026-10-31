@@ -83,14 +83,20 @@ public class MainMenuController {
                     }
                 }
 
+                if (authService != null && guestMenu.getSessionToken() != null
+                        && authService.getAuthenticatedUser(guestMenu.getSessionToken()) == null) {
+                    handleLogout();
+                    continue;
+                }
+
                 // Route authenticated user based on role
                 UserRole role = currentUser.getRole();
                 if (role == UserRole.CUSTOMER) {
                     customerMenu.showMenu(currentUser);
-                } else if (role == UserRole.ADMIN || role == UserRole.STOREKEEPER) {
+                } else if (role == UserRole.ADMIN) {
                     adminMenu.showMenu(currentUser);
                 } else {
-                    io.printError("Unrecognized user role: " + role);
+                    io.printError("This role cannot access the shop menus: " + role);
                 }
 
                 // After customer or admin menu returns, the user chose to Log Out (Option 0)
@@ -107,12 +113,11 @@ public class MainMenuController {
     }
 
     /**
-     * Clears current authenticated user session state.
+     * Clears current authenticated user session state and terminates the active session token.
      */
     public void handleLogout() {
-        if (currentUser != null) {
-            currentUser = null;
-        }
+        guestMenu.logout();
+        currentUser = null;
     }
 
     /**
