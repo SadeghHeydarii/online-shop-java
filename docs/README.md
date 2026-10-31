@@ -32,6 +32,7 @@ docs/
     └── build/                                # ابزارها و اسکریپت‌های اتوماسیون ساخت و تولید PDF
         ├── header.tex                        # پیکربندی استایل‌ها، رنگ‌ها، tcolorbox و xepersian
         ├── generate_latex.py                 # اسکریپت پایتون جهت همگام‌سازی و تولید سورس TeX
+        ├── render_figures.py                 # اسکریپت پایتون جهت رندر خودکار دیاگرام‌ها به SVG و PNG
         └── build_pdf.ps1                     # اسکریپت پاورشل ساخت آسان دو مرحله‌ای PDF با XeLaTeX
 ```
 
