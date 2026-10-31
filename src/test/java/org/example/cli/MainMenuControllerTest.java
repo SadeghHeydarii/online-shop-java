@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -112,7 +113,7 @@ class MainMenuControllerTest {
     }
 
     @Test
-    @DisplayName("start routes storekeeper role to admin menu")
+    @DisplayName("start denies administrative access to the storekeeper role")
     void storekeeperRouting() {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ConsoleIO io = createConsoleIO("0\n0\n", out);
@@ -128,7 +129,8 @@ class MainMenuControllerTest {
         controller.start();
 
         String output = out.toString(StandardCharsets.UTF_8);
-        assertTrue(output.contains("Administration & Warehouse Panel"));
+        assertFalse(output.contains("Administration & Warehouse Panel"));
+        assertTrue(output.contains("This role cannot access the shop menus"));
         assertNull(controller.getCurrentUser());
     }
 }

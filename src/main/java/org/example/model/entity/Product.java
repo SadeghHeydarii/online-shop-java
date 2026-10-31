@@ -1,5 +1,8 @@
 package org.example.model.entity;
 
+import java.net.URI;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 import org.example.model.vo.Money;
 import org.example.model.vo.Quantity;
@@ -9,14 +12,17 @@ import org.example.model.vo.Quantity;
  *
  * <p>A product possesses a unique immutable identifier ({@code id}), commercial title,
  * detailed description, current price, warehouse stock level, parent category identifier,
- * storefront publication status flag, aggregated average review rating, and total review count.
+ * storefront publication status flag, aggregated average review rating, total review count,
+ * catalog creation timestamp, cumulative sold units count, and registered product image URLs.
  *
  * <p><b>Abstraction Function (AF):</b>
- * AF(id, name, description, price, availableStock, categoryId, active, averageRating, reviewCount) =
+ * AF(id, name, description, price, availableStock, categoryId, active, averageRating,
+ * reviewCount, createdAt, soldCount, imageUrls) =
  * A catalog product with unique ID {@code id}, titled {@code name}, described by {@code description},
  * priced at {@code price}, with available physical inventory {@code availableStock}, belonging
  * to category {@code categoryId}, published in storefront if {@code active}, with calculated
- * customer rating {@code averageRating} across {@code reviewCount} reviews.
+ * customer rating {@code averageRating} across {@code reviewCount} reviews, cataloged at {@code createdAt},
+ * with cumulative units sold {@code soldCount}, and visual representations at {@code imageUrls}.
  *
  * <p><b>Representation Invariant (RI):</b>
  * <ul>
@@ -29,11 +35,15 @@ import org.example.model.vo.Quantity;
  *   <li>{@code reviewCount >= 0}</li>
  *   <li>{@code averageRating >= 0.0 && averageRating <= 5.0}</li>
  *   <li>If {@code reviewCount == 0}, then {@code averageRating == 0.0}</li>
+ *   <li>{@code createdAt != null}</li>
+ *   <li>{@code soldCount >= 0}</li>
+ *   <li>{@code imageUrls != null} and contains distinct valid HTTP/HTTPS absolute URLs</li>
  * </ul>
  *
  * <p><b>Safety from Representation Exposure:</b>
- * All fields are private. Primitive types, immutable {@link String}, and immutable
- * Value Objects ({@link Money}, {@link Quantity}) are used throughout.
+ * All fields are private. Primitive types, immutable {@link String}, {@link LocalDateTime},
+ * and immutable Value Objects ({@link Money}, {@link Quantity}) are used. The {@code imageUrls}
+ * list is returned as an unmodifiable list via {@link List#copyOf(java.util.Collection)}.
  */
 public class Product {
 
@@ -46,10 +56,13 @@ public class Product {
     private boolean active;
     private double averageRating;
     private int reviewCount;
+    private final LocalDateTime createdAt;
+    private long soldCount;
+    private List<String> imageUrls;
 
     /**
      * Constructs a new {@code Product} entity with active storefront status,
-     * zero rating, and zero review count.
+     * zero rating, zero review count, zero sold count, empty image list, and current timestamp.
      *
      * @param id           the unique identifier of the product (non-blank)
      * @param name         the commercial title/name of the product (non-blank)
@@ -61,6 +74,23 @@ public class Product {
      */
     public Product(String id, String name, String description, Money price,
                    int initialStock, String categoryId) {
+        this(id, name, description, price, initialStock, categoryId, LocalDateTime.now());
+    }
+
+    /**
+     * Constructs a new {@code Product} entity with an explicit creation timestamp.
+     *
+     * @param id           the unique identifier of the product (non-blank)
+     * @param name         the commercial title/name of the product (non-blank)
+     * @param description  the detailed description of the product (non-null)
+     * @param price        the non-negative price of the product
+     * @param initialStock the initial non-negative physical warehouse stock
+     * @param categoryId   the identifier of the product's category (non-blank)
+     * @param createdAt    the creation timestamp of the product (non-null)
+     * @throws IllegalArgumentException if any argument violates representation invariants
+     */
+    public Product(String id, String name, String description, Money price,
+                   int initialStock, String categoryId, LocalDateTime createdAt) {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Product ID cannot be null or blank");
         }
@@ -79,6 +109,7 @@ public class Product {
         if (categoryId == null || categoryId.isBlank()) {
             throw new IllegalArgumentException("Category ID cannot be null or blank");
         }
+        this.createdAt = Objects.requireNonNull(createdAt, "Creation time cannot be null");
 
         this.id = id;
         this.name = name;
@@ -89,6 +120,8 @@ public class Product {
         this.active = true;
         this.averageRating = 0.0;
         this.reviewCount = 0;
+        this.soldCount = 0;
+        this.imageUrls = List.of();
         checkRep();
     }
 
@@ -107,6 +140,9 @@ public class Product {
         if (reviewCount == 0) {
             assert averageRating == 0.0 : "Average rating must be 0.0 when reviewCount is 0";
         }
+        assert createdAt != null : "Creation time cannot be null";
+        assert soldCount >= 0 : "Sold count cannot be negative";
+        assert imageUrls != null : "Images cannot be null";
     }
 
     /**
@@ -188,6 +224,70 @@ public class Product {
      */
     public int getReviewCount() {
         return reviewCount;
+    }
+
+    /**
+     * Returns the creation timestamp of this product in the catalog.
+     *
+     * @return product creation timestamp
+     */
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    /**
+     * Returns the cumulative total of units sold for this product.
+     *
+     * @return cumulative sold quantity count
+     */
+    public long getSoldCount() {
+        return soldCount;
+    }
+
+    /**
+     * Records a commercial sale by incrementing the cumulative sold units count.
+     *
+     * @param quantity the sold quantity (non-null)
+     * @throws NullPointerException if quantity is null
+     */
+    public void recordSale(Quantity quantity) {
+        Objects.requireNonNull(quantity, "Quantity cannot be null");
+        soldCount = Math.addExact(soldCount, quantity.value());
+        checkRep();
+    }
+
+    /**
+     * Returns an unmodifiable list of registered image URLs for this product.
+     *
+     * @return unmodifiable list of image URLs
+     */
+    public List<String> getImageUrls() {
+        return List.copyOf(imageUrls);
+    }
+
+    /**
+     * Replaces the image URLs for this product after validating that all elements
+     * are absolute HTTP or HTTPS URLs.
+     *
+     * @param urls the list of image URLs (non-null)
+     * @throws NullPointerException     if urls is null
+     * @throws IllegalArgumentException if any URL is blank, malformed, or non-HTTP/HTTPS
+     */
+    public void setImageUrls(List<String> urls) {
+        Objects.requireNonNull(urls, "Image list cannot be null");
+        List<String> normalized = urls.stream().map(url -> {
+            if (url == null || url.isBlank()) {
+                throw new IllegalArgumentException("Image URL cannot be blank");
+            }
+            URI uri = URI.create(url.trim());
+            if (uri.getHost() == null || !("https".equalsIgnoreCase(uri.getScheme())
+                    || "http".equalsIgnoreCase(uri.getScheme()))) {
+                throw new IllegalArgumentException("Image URL must be an absolute HTTP or HTTPS URL");
+            }
+            return uri.toString();
+        }).distinct().toList();
+        this.imageUrls = normalized;
+        checkRep();
     }
 
     /**
@@ -330,6 +430,7 @@ public class Product {
                 + ", active=" + active
                 + ", rating=" + averageRating
                 + ", reviews=" + reviewCount
+                + ", soldCount=" + soldCount
                 + "]";
     }
 }

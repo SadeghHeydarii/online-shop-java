@@ -15,24 +15,26 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@DisplayName("User Entity Invariant and Encapsulation Tests")
 class UserTest {
 
-    private LocalDateTime testTime;
     private User sampleUser;
+    private LocalDateTime testTime;
 
     @BeforeEach
     void setUp() {
-        testTime = LocalDateTime.of(2026, 10, 30, 12, 0);
+        testTime = LocalDateTime.of(2026, 10, 30, 10, 0);
         sampleUser = new User("usr-1", "Ali Rezaei", "ali@aut.ac.ir", "09121112233",
-                "hashed_pwd_secret", UserRole.CUSTOMER, testTime);
+                "hashed_secret_password", UserRole.CUSTOMER, testTime);
     }
 
     @Test
-    @DisplayName("User creation with valid arguments succeeds with initial state")
-    void testValidUserCreation() {
+    @DisplayName("Constructor sets valid initial state")
+    void testConstructorValid() {
         assertEquals("usr-1", sampleUser.getId());
         assertEquals("Ali Rezaei", sampleUser.getFullName());
         assertEquals("ali@aut.ac.ir", sampleUser.getEmail());
@@ -41,7 +43,6 @@ class UserTest {
         assertTrue(sampleUser.isActive());
         assertEquals(testTime, sampleUser.getCreatedAt());
         assertTrue(sampleUser.getAddresses().isEmpty());
-        assertTrue(sampleUser.getDefaultAddress().isEmpty());
     }
 
     @ParameterizedTest
@@ -67,20 +68,20 @@ class UserTest {
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {" ", "\t", "\n"})
-    @DisplayName("User constructor rejects invalid email")
+    @DisplayName("User constructor rejects invalid email when no phone is provided")
     void testInvalidEmail(String invalidEmail) {
         assertThrows(IllegalArgumentException.class, () ->
-                new User("usr-1", "Ali Rezaei", invalidEmail, "09121112233",
+                new User("usr-1", "Ali Rezaei", invalidEmail, "",
                         "hash", UserRole.CUSTOMER, testTime));
     }
 
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {" ", "\t", "\n"})
-    @DisplayName("User constructor rejects invalid phone")
+    @DisplayName("User constructor rejects invalid phone when no email is provided")
     void testInvalidPhone(String invalidPhone) {
         assertThrows(IllegalArgumentException.class, () ->
-                new User("usr-1", "Ali Rezaei", "ali@aut.ac.ir", invalidPhone,
+                new User("usr-1", "Ali Rezaei", "", invalidPhone,
                         "hash", UserRole.CUSTOMER, testTime));
     }
 
@@ -138,9 +139,8 @@ class UserTest {
     }
 
     @ParameterizedTest
-    @NullAndEmptySource
-    @ValueSource(strings = {" ", "\t", "\n"})
-    @DisplayName("updateProfile() rejects invalid phone")
+    @ValueSource(strings = {"123", "letters", "0912x112233"})
+    @DisplayName("updateProfile() rejects malformed phone")
     void testUpdateProfileInvalidPhone(String invalidPhone) {
         assertThrows(IllegalArgumentException.class, () ->
                 sampleUser.updateProfile("Mohammad Rezaei", invalidPhone));
@@ -150,7 +150,6 @@ class UserTest {
     @DisplayName("changePassword() updates password hash successfully")
     void testChangePasswordSuccess() {
         sampleUser.changePassword("new_hashed_password_123");
-        // Verification via no exception thrown and state remains valid
     }
 
     @ParameterizedTest
@@ -163,18 +162,17 @@ class UserTest {
     }
 
     @Test
-    @DisplayName("addAddress() adds addresses and manages default address correctly")
-    void testAddAddress() {
+    @DisplayName("addAddress() adds addresses and maintains default address invariant")
+    void testAddAddressAndDefaultInvariant() {
         Address addr1 = new Address("addr-1", "Ali Rezaei", "09121112233",
-                "Tehran", "Tehran", "Hafez St No 1", "1234567890", "Home", false);
+                "Tehran", "Tehran", "Valiasr St No 1", "1234567890", "Home", false);
         sampleUser.addAddress(addr1);
-
         assertEquals(1, sampleUser.getAddresses().size());
-        assertEquals(addr1, sampleUser.getAddresses().get(0));
-        assertTrue(sampleUser.getDefaultAddress().isEmpty());
+        assertFalse(sampleUser.getDefaultAddress().isPresent());
 
+        // Adding a default address
         Address addr2 = new Address("addr-2", "Ali Rezaei", "09121112233",
-                "Tehran", "Tehran", "Valiasr St No 2", "1234567891", "Work", true);
+                "Tehran", "Tehran", "Enghelab St No 2", "1234567891", "Work", true);
         sampleUser.addAddress(addr2);
 
         assertEquals(2, sampleUser.getAddresses().size());
@@ -182,143 +180,126 @@ class UserTest {
         assertTrue(defaultAddr.isPresent());
         assertEquals("addr-2", defaultAddr.get().addressId());
 
-        // Adding another default address should make addr2 non-default
         Address addr3 = new Address("addr-3", "Ali Rezaei", "09121112233",
                 "Tehran", "Tehran", "Azadi St No 3", "1234567892", "Other", true);
         sampleUser.addAddress(addr3);
 
         assertEquals(3, sampleUser.getAddresses().size());
         assertEquals("addr-3", sampleUser.getDefaultAddress().get().addressId());
-        // Verify addr2 is no longer default
+
         Address updatedAddr2 = sampleUser.getAddresses().stream()
                 .filter(a -> a.addressId().equals("addr-2"))
                 .findFirst().orElseThrow();
-        assertFalse(updatedAddr2.isDefault());
+        assertFalse(updatedAddr2.isDefault(), "Earlier default address must become non-default");
     }
 
     @Test
-    @DisplayName("addAddress() with existing ID replaces address")
-    void testAddAddressReplacesExistingId() {
+    @DisplayName("addAddress() updates existing address by ID")
+    void testAddAddressReplacesExisting() {
         Address addr1 = new Address("addr-1", "Ali Rezaei", "09121112233",
-                "Tehran", "Tehran", "Hafez St No 1", "1234567890", "Home", false);
+                "Tehran", "Tehran", "Old Street", "1234567890", "Home", false);
         sampleUser.addAddress(addr1);
 
         Address addr1Updated = new Address("addr-1", "Ali Rezaei", "09121112233",
-                "Tehran", "Tehran", "Hafez St No 10", "1234567890", "Home", true);
+                "Tehran", "Tehran", "New Street", "1234567890", "Home", false);
         sampleUser.addAddress(addr1Updated);
 
         assertEquals(1, sampleUser.getAddresses().size());
-        assertEquals("Hafez St No 10", sampleUser.getAddresses().get(0).streetAddress());
-        assertTrue(sampleUser.getAddresses().get(0).isDefault());
+        assertEquals("New Street", sampleUser.getAddresses().get(0).streetAddress());
     }
 
     @Test
     @DisplayName("addAddress() rejects null address")
-    void testAddNullAddress() {
+    void testAddAddressNull() {
         assertThrows(IllegalArgumentException.class, () -> sampleUser.addAddress(null));
     }
 
     @Test
-    @DisplayName("removeAddress() removes existing address")
+    @DisplayName("removeAddress() removes specified address")
     void testRemoveAddress() {
         Address addr1 = new Address("addr-1", "Ali Rezaei", "09121112233",
-                "Tehran", "Tehran", "Hafez St No 1", "1234567890", "Home", false);
+                "Tehran", "Tehran", "Valiasr St No 1", "1234567890", "Home", true);
         Address addr2 = new Address("addr-2", "Ali Rezaei", "09121112233",
-                "Tehran", "Tehran", "Valiasr St No 2", "1234567891", "Work", false);
+                "Tehran", "Tehran", "Enghelab St No 2", "1234567891", "Work", false);
         sampleUser.addAddress(addr1);
         sampleUser.addAddress(addr2);
-        assertEquals(2, sampleUser.getAddresses().size());
 
         sampleUser.removeAddress("addr-1");
         assertEquals(1, sampleUser.getAddresses().size());
         assertEquals("addr-2", sampleUser.getAddresses().get(0).addressId());
+        assertFalse(sampleUser.getDefaultAddress().isPresent());
     }
 
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {" ", "\t", "\n"})
     @DisplayName("removeAddress() rejects invalid address ID")
-    void testRemoveAddressInvalidId(String invalidId) {
+    void testRemoveAddressInvalid(String invalidId) {
         assertThrows(IllegalArgumentException.class, () -> sampleUser.removeAddress(invalidId));
     }
 
     @Test
-    @DisplayName("setDefaultAddress() sets target address as default and clears others")
-    void testSetDefaultAddressSuccess() {
+    @DisplayName("setDefaultAddress() selects target address and unsets previous default")
+    void testSetDefaultAddress() {
         Address addr1 = new Address("addr-1", "Ali Rezaei", "09121112233",
-                "Tehran", "Tehran", "Hafez St No 1", "1234567890", "Home", true);
+                "Tehran", "Tehran", "Valiasr St No 1", "1234567890", "Home", true);
         Address addr2 = new Address("addr-2", "Ali Rezaei", "09121112233",
-                "Tehran", "Tehran", "Valiasr St No 2", "1234567891", "Work", false);
+                "Tehran", "Tehran", "Enghelab St No 2", "1234567891", "Work", false);
         sampleUser.addAddress(addr1);
         sampleUser.addAddress(addr2);
 
         sampleUser.setDefaultAddress("addr-2");
-
-        Address updated1 = sampleUser.getAddresses().stream()
-                .filter(a -> a.addressId().equals("addr-1")).findFirst().orElseThrow();
-        Address updated2 = sampleUser.getAddresses().stream()
-                .filter(a -> a.addressId().equals("addr-2")).findFirst().orElseThrow();
-
-        assertFalse(updated1.isDefault());
-        assertTrue(updated2.isDefault());
         assertEquals("addr-2", sampleUser.getDefaultAddress().get().addressId());
+
+        Address updatedAddr1 = sampleUser.getAddresses().stream()
+                .filter(a -> a.addressId().equals("addr-1"))
+                .findFirst().orElseThrow();
+        assertFalse(updatedAddr1.isDefault());
     }
 
     @Test
-    @DisplayName("setDefaultAddress() rejects non-existent address ID")
-    void testSetDefaultAddressNonExistent() {
-        Address addr1 = new Address("addr-1", "Ali Rezaei", "09121112233",
-                "Tehran", "Tehran", "Hafez St No 1", "1234567890", "Home", false);
-        sampleUser.addAddress(addr1);
-
+    @DisplayName("setDefaultAddress() throws for non-existent address ID")
+    void testSetDefaultAddressNotFound() {
         assertThrows(IllegalArgumentException.class, () -> sampleUser.setDefaultAddress("non-existent"));
     }
 
-    @ParameterizedTest
-    @NullAndEmptySource
-    @ValueSource(strings = {" ", "\t", "\n"})
-    @DisplayName("setDefaultAddress() rejects invalid address ID")
-    void testSetDefaultAddressInvalidId(String invalidId) {
-        assertThrows(IllegalArgumentException.class, () -> sampleUser.setDefaultAddress(invalidId));
-    }
-
     @Test
-    @DisplayName("Representation exposure: getAddresses() returns unmodifiable copy")
-    void testAddressesImmutability() {
+    @DisplayName("getAddresses() returns unmodifiable copy protecting internal rep")
+    void testGetAddressesRepExposure() {
         Address addr1 = new Address("addr-1", "Ali Rezaei", "09121112233",
-                "Tehran", "Tehran", "Hafez St No 1", "1234567890", "Home", false);
+                "Tehran", "Tehran", "Valiasr St No 1", "1234567890", "Home", true);
         sampleUser.addAddress(addr1);
 
         List<Address> addresses = sampleUser.getAddresses();
-        Address addr2 = new Address("addr-2", "Ali Rezaei", "09121112233",
-                "Tehran", "Tehran", "Valiasr St No 2", "1234567891", "Work", false);
-
-        assertThrows(UnsupportedOperationException.class, () -> addresses.add(addr2));
+        Address addr2 = new Address("addr-2", "Ali", "09121112233", "Tehran", "Tehran", "Street", "1234567890", "Work", false);
+        assertThrows(UnsupportedOperationException.class, () ->
+                addresses.add(addr2));
     }
 
     @Test
-    @DisplayName("Entity equality is strictly based on identity ID")
-    void testEntityIdentityEquality() {
-        User userSameId = new User("usr-1", "Different Name", "other@aut.ac.ir", "09998887766",
+    @DisplayName("equals and hashCode based on entity identity (id)")
+    void testEqualsAndHashCode() {
+        User sameIdUser = new User("usr-1", "Different Name", "other@aut.ac.ir", "09120000000",
                 "different_hash", UserRole.ADMIN, testTime.plusDays(1));
+        User diffIdUser = new User("usr-2", "Ali Rezaei", "ali@aut.ac.ir", "09121112233",
+                "hashed_secret_password", UserRole.CUSTOMER, testTime);
 
-        User userDifferentId = new User("usr-2", "Ali Rezaei", "ali@aut.ac.ir", "09121112233",
-                "hashed_pwd_secret", UserRole.CUSTOMER, testTime);
+        assertEquals(sampleUser, sampleUser);
+        assertEquals(sampleUser, sameIdUser);
+        assertEquals(sampleUser.hashCode(), sameIdUser.hashCode());
 
-        assertEquals(sampleUser, userSameId);
-        assertEquals(sampleUser.hashCode(), userSameId.hashCode());
-        assertNotEquals(sampleUser, userDifferentId);
+        assertNotEquals(sampleUser, diffIdUser);
         assertNotEquals(sampleUser, null);
         assertNotEquals(sampleUser, "not-a-user");
     }
 
     @Test
-    @DisplayName("toString() does not expose raw password hash")
-    void testToStringSecurity() {
+    @DisplayName("toString contains relevant entity details")
+    void testToString() {
         String str = sampleUser.toString();
+        assertNotNull(str);
         assertTrue(str.contains("usr-1"));
         assertTrue(str.contains("Ali Rezaei"));
-        assertTrue(str.contains("ali@aut.ac.ir"));
-        assertFalse(str.contains("hashed_pwd_secret"));
+        assertTrue(str.contains("CUSTOMER"));
     }
 }

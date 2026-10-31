@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.UUID;
 import org.example.cli.ConsoleIO;
 import org.example.exception.InsufficientStockException;
 import org.example.exception.InvalidCouponException;
@@ -52,6 +53,7 @@ public class CustomerMenu {
     private final ProductService productService;
     private final ReviewService reviewService;
     private final ConsoleIO io;
+    private final CatalogMenu catalogMenu;
 
     /**
      * Constructs a {@code CustomerMenu} with all required coordinating domain services.
@@ -75,6 +77,7 @@ public class CustomerMenu {
         this.productService = Objects.requireNonNull(productService, "productService cannot be null");
         this.reviewService = reviewService;
         this.io = Objects.requireNonNull(io, "io cannot be null");
+        this.catalogMenu = new CatalogMenu(productService, reviewService, io);
     }
 
     /**
@@ -94,11 +97,12 @@ public class CustomerMenu {
             io.println("4. My Order History & Tracking");
             io.println("5. Submit Product Review");
             io.println("6. Profile & Delivery Address Book");
+            io.println("7. Search, Sort, Categories & Product Details");
             io.println("0. Log Out");
             io.printDivider();
 
             try {
-                int choice = io.readInt("Select an option", 0, 6);
+                int choice = io.readInt("Select an option", 0, 7);
                 switch (choice) {
                     case 1 -> handleBrowseAndAddToCart(current);
                     case 2 -> handleCartManagement(current);
@@ -106,6 +110,7 @@ public class CustomerMenu {
                     case 4 -> handleOrderHistory(current);
                     case 5 -> handleSubmitReview(current);
                     case 6 -> handleProfileManagement(current);
+                    case 7 -> catalogMenu.showMenu();
                     case 0 -> {
                         io.println("Logging out of customer session. Goodbye!");
                         return;
@@ -113,9 +118,10 @@ public class CustomerMenu {
                     default -> io.printError("Invalid option selected.");
                 }
             } catch (NoSuchElementException e) {
-                // End of input stream reached (e.g. pipe or automated test)
                 io.println();
                 return;
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                io.printError(e.getMessage());
             }
         }
     }
@@ -346,10 +352,10 @@ public class CustomerMenu {
         boolean simulateSuccess = io.readBoolean("Simulate successful payment authorization?");
 
         try {
-            boolean success = orderService.processPayment(order.getOrderId(), method, simulateSuccess);
+            boolean success = orderService.processPayment(user.getId(), order.getOrderId(), method, simulateSuccess);
             if (success) {
                 io.printSuccess("Payment authorization accepted! Order #" + order.getOrderId() + " status is now PAID.");
-                io.printInfo("Warehouse stock has been reserved and your shopping cart has been cleared.");
+                io.printInfo("Stock deducted. Unchanged purchased cart items were removed; later edits were kept.");
             } else {
                 io.printError("Payment simulation failed or was rejected. Order marked as PAYMENT_FAILED.");
                 io.printInfo("Your cart items have been preserved so you can retry payment at your convenience.");
@@ -397,21 +403,21 @@ public class CustomerMenu {
                 case 1 -> {
                     String oid = io.readString("Enter Order ID to inspect");
                     try {
-                        Order o = orderService.getOrderDetails(oid);
+                        Order o = orderService.getOrderDetails(user.getId(), oid);
                         displayOrderDetails(o);
-                    } catch (OrderNotFoundException e) {
+                    } catch (OrderNotFoundException | UnauthorizedActionException e) {
                         io.printError(e.getMessage());
                     }
                 }
                 case 2 -> {
                     String oid = io.readString("Enter Order ID to pay");
                     try {
-                        Order o = orderService.getOrderDetails(oid);
+                        Order o = orderService.getOrderDetails(user.getId(), oid);
                         if (o.getStatus() != OrderStatus.PENDING && o.getStatus() != OrderStatus.PAYMENT_FAILED) {
                             io.printWarning("Order is currently in status " + o.getStatus() + " and cannot be paid.");
                             break;
                         }
-                        boolean success = orderService.processPayment(oid, PaymentMethod.ONLINE_GATEWAY, true);
+                        boolean success = orderService.processPayment(user.getId(), oid, PaymentMethod.ONLINE_GATEWAY, true);
                         if (success) {
                             io.printSuccess("Payment completed! Order is now PAID.");
                         } else {
@@ -424,7 +430,7 @@ public class CustomerMenu {
                 case 3 -> {
                     String oid = io.readString("Enter Order ID to cancel");
                     try {
-                        boolean cancelled = orderService.cancelOrder(oid);
+                        boolean cancelled = orderService.cancelOrder(user.getId(), oid);
                         if (cancelled) {
                             io.printSuccess("Order #" + oid + " has been successfully CANCELLED.");
                         }
@@ -537,13 +543,14 @@ public class CustomerMenu {
             io.println("  2. Add Delivery Address");
             io.println("  3. Remove Delivery Address");
             io.println("  4. Set Default Delivery Address");
+            io.println("  5. Edit Delivery Address");
             io.println("  0. Back to Main Menu");
 
-            int action = io.readInt("Choose profile action", 0, 4);
+            int action = io.readInt("Choose profile action", 0, 5);
             switch (action) {
                 case 1 -> {
                     String newName = io.readString("New Full Name");
-                    String newPhone = io.readString("New Phone Number");
+                    String newPhone = readOrKeep("New Phone Number", current.getPhone());
                     try {
                         userService.updateProfile(user.getId(), newName, newPhone);
                         io.printSuccess("Profile updated successfully.");
@@ -552,6 +559,7 @@ public class CustomerMenu {
                     }
                 }
                 case 2 -> promptAddAddress(user.getId());
+                case 5 -> promptEditAddress(user.getId());
                 case 3 -> {
                     List<Address> addrs = current.getAddresses();
                     if (addrs.isEmpty()) {
@@ -602,10 +610,9 @@ public class CustomerMenu {
         String title = io.readString("Address Label/Title (e.g. Home, Office)");
         boolean isDefault = io.readBoolean("Set this as default delivery address?");
 
-        String addressId = "addr-" + System.currentTimeMillis();
-        Address address = new Address(addressId, recipient, phone, province, city, street, postalCode, title, isDefault);
-
+        String addressId = "addr-" + UUID.randomUUID();
         try {
+            Address address = new Address(addressId, recipient, phone, province, city, street, postalCode, title, isDefault);
             userService.addAddress(userId, address);
             io.printSuccess("Address '" + title + "' added successfully.");
         } catch (RuntimeException e) {
@@ -632,12 +639,48 @@ public class CustomerMenu {
         return userService.getProfile(userId);
     }
 
+    private void promptEditAddress(String userId) {
+        List<Address> addresses = userService.getProfile(userId).getAddresses();
+        if (addresses.isEmpty()) {
+            io.printInfo("Address book is empty.");
+            return;
+        }
+        displayAddresses(addresses);
+        String addressId = io.readString("Address ID to edit");
+        Address current = addresses.stream().filter(address -> address.addressId().equals(addressId))
+                .findFirst().orElse(null);
+        if (current == null) {
+            io.printError("Address does not belong to this user");
+            return;
+        }
+        String recipient = readOrKeep("Recipient", current.recipientName());
+        String phone = readOrKeep("Phone", current.phone());
+        String province = readOrKeep("Province", current.province());
+        String city = readOrKeep("City", current.city());
+        String street = readOrKeep("Street", current.streetAddress());
+        String postalCode = readOrKeep("Postal Code", current.postalCode());
+        String title = readOrKeep("Title", current.title());
+        boolean isDefault = io.readBoolean("Set as default address?");
+        try {
+            userService.updateAddress(userId, new Address(current.addressId(), recipient, phone, province, city, street, postalCode, title, isDefault));
+            io.printSuccess("Address updated successfully.");
+        } catch (RuntimeException e) {
+            io.printError("Address update failed: " + e.getMessage());
+        }
+    }
+
+    private String readOrKeep(String label, String current) {
+        String value = io.readLine(label + " (blank keeps '" + current + "')");
+        return value.isBlank() ? current : value;
+    }
+
+
     private void displayProductTable(List<Product> products) {
         List<String> headers = List.of("ID", "Name", "Category", "Price", "Stock", "Rating");
         List<List<String>> rows = new ArrayList<>();
         for (Product p : products) {
             String priceStr = p.getPrice().amount() + " " + p.getPrice().currency();
-            String ratingStr = String.format("%.1f ★ (%d)", p.getAverageRating(), p.getReviewCount());
+            String ratingStr = String.format("%.1f Γÿà (%d)", p.getAverageRating(), p.getReviewCount());
             rows.add(List.of(
                     p.getId(),
                     p.getName(),

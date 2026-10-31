@@ -1,5 +1,6 @@
 package org.example.service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -7,6 +8,7 @@ import org.example.exception.InsufficientStockException;
 import org.example.exception.InvalidInputException;
 import org.example.model.entity.Cart;
 import org.example.model.entity.Product;
+import org.example.model.vo.CartItem;
 import org.example.model.vo.Quantity;
 
 /**
@@ -15,8 +17,8 @@ import org.example.model.vo.Quantity;
  * <p>Specification compliance:
  * <ul>
  *   <li>Conforms strictly to Section 5.4 and Figure 2 of domain-model-specification.</li>
- *   <li>Case A: Implements the exact 5 approved public methods without inventing unapproved APIs.</li>
  *   <li>Validates available warehouse stock before admitting items into carts.</li>
+ *   <li>Supports selective removal of checked-out items upon successful checkout orchestration.</li>
  * </ul>
  */
 public class CartService {
@@ -94,22 +96,11 @@ public class CartService {
         String targetUserId = userId.trim();
         String targetProductId = productId.trim();
 
-        Product product = productService.getProductById(targetProductId);
-        if (!product.isActive()) {
-            throw new InvalidInputException("Product '" + targetProductId + "' is currently inactive and cannot be purchased");
-        }
-
         Cart cart = getCart(targetUserId);
         int currentQty = cart.quantityOf(targetProductId);
         int totalRequested = currentQty + quantity.value();
 
-        if (!product.isAvailable(new Quantity(totalRequested))) {
-            throw new InsufficientStockException(
-                    "Insufficient stock for product '" + product.getName() + "': available "
-                            + product.getAvailableStock() + ", total requested " + totalRequested
-            );
-        }
-
+        Product product = productService.requireAvailableProduct(targetProductId, new Quantity(totalRequested));
         cart.addProduct(product, quantity);
     }
 
@@ -120,7 +111,7 @@ public class CartService {
      * @param userId      unique identifier of the customer
      * @param productId   unique identifier of the product
      * @param newQuantity the updated quantity desired
-     * @throws InvalidInputException      if inputs are null or blank
+     * @throws InvalidInputException      if inputs are null or blank, or product not present in cart
      * @throws InsufficientStockException if the requested new quantity exceeds available warehouse stock
      */
     public void updateItemQuantity(String userId, String productId, Quantity newQuantity) {
@@ -138,19 +129,16 @@ public class CartService {
         String targetProductId = productId.trim();
         Cart cart = getCart(targetUserId);
 
+        if (cart.quantityOf(targetProductId) == 0) {
+            throw new InvalidInputException("Product is not present in this cart");
+        }
+
         if (newQuantity.value() <= 0) {
             cart.removeProduct(targetProductId);
             return;
         }
 
-        Product product = productService.getProductById(targetProductId);
-        if (!product.isAvailable(newQuantity)) {
-            throw new InsufficientStockException(
-                    "Insufficient stock for product '" + product.getName() + "': available "
-                            + product.getAvailableStock() + ", requested " + newQuantity.value()
-            );
-        }
-
+        productService.requireAvailableProduct(targetProductId, newQuantity);
         cart.updateQuantity(targetProductId, newQuantity);
     }
 
@@ -169,6 +157,9 @@ public class CartService {
             throw new InvalidInputException("Product ID cannot be null or blank");
         }
         Cart cart = getCart(userId.trim());
+        if (cart.quantityOf(productId.trim()) == 0) {
+            throw new InvalidInputException("Product is not present in this cart");
+        }
         cart.removeProduct(productId.trim());
     }
 
@@ -184,5 +175,17 @@ public class CartService {
         }
         Cart cart = getCart(userId.trim());
         cart.clear();
+    }
+
+    /**
+     * Selectively removes checked-out snapshot items from the user's cart.
+     *
+     * @param userId   unique identifier of the customer
+     * @param snapshot the list of checked-out cart items to remove
+     * @throws InvalidInputException if userId is null or blank
+     * @throws NullPointerException  if snapshot is null
+     */
+    public void removeCheckedOutItems(String userId, List<CartItem> snapshot) {
+        getCart(userId).removeCheckedOutItems(snapshot);
     }
 }

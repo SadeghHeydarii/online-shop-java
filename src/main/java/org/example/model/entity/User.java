@@ -7,18 +7,20 @@ import java.util.Objects;
 import java.util.Optional;
 import org.example.model.enums.UserRole;
 import org.example.model.vo.Address;
+import org.example.model.vo.ContactInfo;
 
 /**
  * Represents a user account entity in the online shop system.
  *
  * <p>A user possesses a unique identity ({@code id}), credentials, profile attributes,
  * an assigned system role, an activation status flag, account creation timestamp,
- * and an encapsulated list of associated physical delivery addresses.
+ * and an encapsulated list of associated physical delivery addresses. Account contact
+ * details (email and mobile telephone number) are validated and normalized using {@link ContactInfo}.
  *
  * <p><b>Abstraction Function (AF):</b>
  * AF(id, fullName, email, phone, passwordHash, role, active, createdAt, addresses) =
  * A registered customer, administrator, or storekeeper in the system identified by {@code id},
- * reachable at {@code email} and {@code phone}, with security credentials {@code passwordHash},
+ * reachable at {@code email} and/or {@code phone}, with security credentials {@code passwordHash},
  * having role {@code role}, active state {@code active}, registered at {@code createdAt},
  * and maintaining delivery addresses {@code addresses}.
  *
@@ -26,8 +28,8 @@ import org.example.model.vo.Address;
  * <ul>
  *   <li>{@code id != null && !id.isBlank()}</li>
  *   <li>{@code fullName != null && !fullName.isBlank()}</li>
- *   <li>{@code email != null && !email.isBlank()}</li>
- *   <li>{@code phone != null && !phone.isBlank()}</li>
+ *   <li>{@code email != null} and {@code phone != null}</li>
+ *   <li>At least one of {@code email} or {@code phone} is non-blank and valid per {@link ContactInfo}</li>
  *   <li>{@code passwordHash != null && !passwordHash.isBlank()}</li>
  *   <li>{@code role != null}</li>
  *   <li>{@code createdAt != null}</li>
@@ -56,12 +58,12 @@ public class User {
      *
      * @param id           the unique immutable identifier of the user
      * @param fullName     the full name of the user
-     * @param email        the unique email address
-     * @param phone        the telephone contact number
+     * @param email        the unique email address (optional if phone provided)
+     * @param phone        the telephone contact number (optional if email provided)
      * @param passwordHash the secure cryptographic hash of the password
      * @param role         the user role (CUSTOMER, ADMIN, STOREKEEPER)
      * @param createdAt    the account registration timestamp
-     * @throws IllegalArgumentException if any string argument is null/blank, or role/createdAt is null
+     * @throws IllegalArgumentException if any string argument is invalid, or role/createdAt is null
      */
     public User(String id, String fullName, String email, String phone,
                 String passwordHash, UserRole role, LocalDateTime createdAt) {
@@ -71,12 +73,7 @@ public class User {
         if (fullName == null || fullName.isBlank()) {
             throw new IllegalArgumentException("Full name cannot be null or blank");
         }
-        if (email == null || email.isBlank()) {
-            throw new IllegalArgumentException("Email cannot be null or blank");
-        }
-        if (phone == null || phone.isBlank()) {
-            throw new IllegalArgumentException("Phone number cannot be null or blank");
-        }
+        ContactInfo contact = new ContactInfo(email, phone);
         if (passwordHash == null || passwordHash.isBlank()) {
             throw new IllegalArgumentException("Password hash cannot be null or blank");
         }
@@ -89,8 +86,8 @@ public class User {
 
         this.id = id;
         this.fullName = fullName;
-        this.email = email;
-        this.phone = phone;
+        this.email = contact.email();
+        this.phone = contact.phone();
         this.passwordHash = passwordHash;
         this.role = role;
         this.active = true;
@@ -105,8 +102,8 @@ public class User {
     private void checkRep() {
         assert id != null && !id.isBlank() : "User id cannot be null or blank";
         assert fullName != null && !fullName.isBlank() : "User fullName cannot be null or blank";
-        assert email != null && !email.isBlank() : "User email cannot be null or blank";
-        assert phone != null && !phone.isBlank() : "User phone cannot be null or blank";
+        assert email != null : "User email cannot be null";
+        assert phone != null && (!email.isBlank() || !phone.isBlank()) : "A contact identifier is required";
         assert passwordHash != null && !passwordHash.isBlank() : "User passwordHash cannot be null or blank";
         assert role != null : "User role cannot be null";
         assert createdAt != null : "User createdAt cannot be null";
@@ -204,18 +201,16 @@ public class User {
      * Updates profile personal details (full name and phone number).
      *
      * @param newFullName the new full name (non-blank)
-     * @param newPhone    the new phone number (non-blank)
-     * @throws IllegalArgumentException if either parameter is null or blank
+     * @param newPhone    the new phone number (validated via {@link ContactInfo})
+     * @throws IllegalArgumentException if either parameter is null or blank, or phone is invalid
      */
     public void updateProfile(String newFullName, String newPhone) {
         if (newFullName == null || newFullName.isBlank()) {
             throw new IllegalArgumentException("New full name cannot be null or blank");
         }
-        if (newPhone == null || newPhone.isBlank()) {
-            throw new IllegalArgumentException("New phone cannot be null or blank");
-        }
-        this.fullName = newFullName;
-        this.phone = newPhone;
+        ContactInfo contact = new ContactInfo(email, newPhone);
+        this.fullName = newFullName.trim();
+        this.phone = contact.phone();
         checkRep();
     }
 

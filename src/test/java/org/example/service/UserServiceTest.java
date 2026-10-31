@@ -94,9 +94,8 @@ class UserServiceTest {
     }
 
     @ParameterizedTest
-    @NullAndEmptySource
-    @ValueSource(strings = {" ", "\t", "\n"})
-    @DisplayName("updateProfile() rejects invalid phone")
+    @ValueSource(strings = {"123", "letters", "0912x112233"})
+    @DisplayName("updateProfile() rejects malformed phone")
     void testUpdateProfileInvalidPhone(String invalidPhone) {
         assertThrows(InvalidInputException.class, () ->
                 userService.updateProfile("usr-1", "Ali R.", invalidPhone));

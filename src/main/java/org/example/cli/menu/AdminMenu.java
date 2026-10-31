@@ -2,7 +2,9 @@ package org.example.cli.menu;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import org.example.cli.ConsoleIO;
@@ -15,6 +17,7 @@ import org.example.model.entity.Order;
 import org.example.model.entity.Product;
 import org.example.model.entity.User;
 import org.example.model.enums.OrderStatus;
+import org.example.model.enums.UserRole;
 import org.example.model.vo.Money;
 import org.example.service.OrderService;
 import org.example.service.ProductService;
@@ -22,7 +25,7 @@ import org.example.service.ProductService;
 /**
  * Interactive console menu for administrators and storekeepers.
  *
- * <p>Coordinates catalog maintenance, inventory management, and order fulfillment workflows
+ * <p>Coordinates catalog maintenance, inventory management, product images, and order fulfillment workflows
  * specified in Section 6.4 and Figure 3 of the authoritative domain specification, covering
  * User Stories US 29, US 33 through US 36:
  * <ul>
@@ -30,7 +33,7 @@ import org.example.service.ProductService;
  *   <li>US 34: Updating existing product specifications, pricing, or categories.</li>
  *   <li>US 35: Deactivating obsolete products from the active catalog.</li>
  *   <li>US 36: Restocking and adjusting warehouse inventory levels.</li>
- *   <li>US 29: Order fulfillment and status advancement (PROCESSING, SHIPPED, DELIVERED).</li>
+ *   <li>US 29: Order fulfillment, status advancement, and order auditing.</li>
  * </ul>
  */
 public class AdminMenu {
@@ -53,26 +56,33 @@ public class AdminMenu {
     }
 
     /**
-     * Runs the interactive Admin Menu loop for the authenticated administrator/storekeeper until logout.
+     * Runs the interactive Admin Menu loop for the authenticated administrator until logout.
      *
      * @param admin the authenticated admin user
      */
     public void showMenu(User admin) {
         Objects.requireNonNull(admin, "Admin user cannot be null");
 
+        if (admin.getRole() != UserRole.ADMIN) {
+            io.printError("Administrator access required");
+            return;
+        }
+
         while (true) {
             io.printHeader("Administration & Warehouse Panel - " + admin.getFullName() + " [" + admin.getRole() + "]");
-            io.println("1. View Active Products");
+            io.println("1. View All Products");
             io.println("2. Add New Product to Catalog");
             io.println("3. Update Product Specifications");
             io.println("4. Deactivate Product");
             io.println("5. Manage Inventory & Restock");
             io.println("6. Inspect & Advance Order Status");
+            io.println("7. Manage Product Images");
+            io.println("8. List Orders / Filter by Status");
             io.println("0. Log Out");
             io.printDivider();
 
             try {
-                int choice = io.readInt("Select an option", 0, 6);
+                int choice = io.readInt("Select an option", 0, 8);
                 switch (choice) {
                     case 1 -> handleViewAllProducts();
                     case 2 -> handleAddProduct();
@@ -80,6 +90,8 @@ public class AdminMenu {
                     case 4 -> handleDeactivateProduct();
                     case 5 -> handleManageStock();
                     case 6 -> handleProcessOrders();
+                    case 7 -> handleProductImages();
+                    case 8 -> handleListOrders();
                     case 0 -> {
                         io.println("Logging out of administrative session. Goodbye!");
                         return;
@@ -90,19 +102,24 @@ public class AdminMenu {
                 // End of input stream reached (e.g. pipe or automated test)
                 io.println();
                 return;
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                io.printError(e.getMessage());
             }
         }
     }
 
     // =========================================================================
-    // 1. VIEW ACTIVE PRODUCTS
+    // 1. VIEW ALL PRODUCTS
     // =========================================================================
 
+    /**
+     * Displays all catalog products (active and inactive).
+     */
     public void handleViewAllProducts() {
         io.printHeader("Catalog Products List");
-        List<Product> products = productService.getAllActiveProducts();
+        List<Product> products = productService.getAllProducts();
         if (products.isEmpty()) {
-            io.printInfo("No active products currently in catalog.");
+            io.printInfo("No products currently in catalog.");
             return;
         }
 
@@ -113,6 +130,9 @@ public class AdminMenu {
     // 2. ADD PRODUCT (US 33)
     // =========================================================================
 
+    /**
+     * Handles adding a new product to the catalog.
+     */
     public void handleAddProduct() {
         io.printHeader("Add New Product to Catalog (US 33)");
         String name = io.readString("Product Name");
@@ -134,6 +154,9 @@ public class AdminMenu {
     // 3. EDIT PRODUCT (US 34)
     // =========================================================================
 
+    /**
+     * Handles updating an existing product's specifications.
+     */
     public void handleEditProduct() {
         io.printHeader("Update Product Specifications (US 34)");
         String productId = io.readString("Enter Product ID to update");
@@ -173,7 +196,7 @@ public class AdminMenu {
 
             productService.updateProduct(productId, newName, newDesc, newPrice, newCatId);
             io.printSuccess("Product '" + productId + "' updated successfully.");
-        } catch (ProductNotFoundException | CategoryNotFoundException | InvalidInputException e) {
+        } catch (ProductNotFoundException | CategoryNotFoundException | IllegalArgumentException e) {
             io.printError("Product update failed: " + e.getMessage());
         }
     }
@@ -182,6 +205,9 @@ public class AdminMenu {
     // 4. DEACTIVATE PRODUCT (US 35)
     // =========================================================================
 
+    /**
+     * Handles deactivating a product from the active catalog.
+     */
     public void handleDeactivateProduct() {
         io.printHeader("Deactivate Product from Catalog (US 35)");
         String productId = io.readString("Enter Product ID to deactivate");
@@ -207,6 +233,9 @@ public class AdminMenu {
     // 5. MANAGE INVENTORY STOCK (US 36)
     // =========================================================================
 
+    /**
+     * Handles inventory restock or deduction.
+     */
     public void handleManageStock() {
         io.printHeader("Warehouse Inventory Adjustment (US 36)");
         String productId = io.readString("Enter Product ID");
@@ -248,16 +277,19 @@ public class AdminMenu {
     // 6. PROCESS CUSTOMER ORDERS (US 29)
     // =========================================================================
 
+    /**
+     * Handles advancing customer order status through valid transitions.
+     */
     public void handleProcessOrders() {
         io.printHeader("Order Fulfillment & Status Advancement (US 29)");
         String orderId = io.readString("Enter Order ID to process");
 
         try {
             Order order = orderService.getOrderDetails(orderId);
-            io.println("Order ID:     " + order.getOrderId());
-            io.println("User ID:      " + order.getUserId());
+            io.println("Order ID:       " + order.getOrderId());
+            io.println("User ID:        " + order.getUserId());
             io.println("Current Status: " + order.getStatus());
-            io.println("Total Amount: " + order.getPayableAmount().amount() + " " + order.getPayableAmount().currency());
+            io.println("Total Amount:   " + order.getPayableAmount().amount() + " " + order.getPayableAmount().currency());
             io.printDivider();
 
             io.println("Available Transitions:");
@@ -292,6 +324,49 @@ public class AdminMenu {
             }
         } catch (OrderNotFoundException | InvalidOrderStateException | InvalidInputException e) {
             io.printError("Order processing error: " + e.getMessage());
+        }
+    }
+
+    // =========================================================================
+    // 7. MANAGE PRODUCT IMAGES
+    // =========================================================================
+
+    /**
+     * Handles setting product image URLs for a catalog product.
+     */
+    public void handleProductImages() {
+        String productId = io.readString("Product ID");
+        String raw = io.readLine("Image URLs separated by commas (blank clears images)");
+        List<String> urls = raw.isBlank() ? List.of()
+                : Arrays.stream(raw.split(",")).map(String::trim).toList();
+        try {
+            productService.setProductImages(productId, urls);
+            io.printSuccess("Product images updated.");
+        } catch (ProductNotFoundException | IllegalArgumentException e) {
+            io.printError("Image update failed: " + e.getMessage());
+        }
+    }
+
+    // =========================================================================
+    // 8. LIST ORDERS / FILTER BY STATUS
+    // =========================================================================
+
+    /**
+     * Handles listing all store orders or filtering orders by lifecycle status.
+     */
+    public void handleListOrders() {
+        io.printHeader("All Store Orders");
+        io.println("Statuses: " + Arrays.toString(OrderStatus.values()));
+        String raw = io.readLine("Status filter (blank for all)");
+        try {
+            OrderStatus status = raw.isBlank() ? null : OrderStatus.valueOf(raw.toUpperCase(Locale.ROOT));
+            List<Order> orders = status == null ? orderService.getAllOrders() : orderService.getOrdersByStatus(status);
+            List<List<String>> rows = orders.stream().map(order -> List.of(
+                    order.getOrderId(), order.getUserId(), order.getStatus().name(),
+                    order.getCreatedAt().toString(), order.getPayableAmount().toString())).toList();
+            io.printTable(List.of("Order ID", "Customer", "Status", "Created", "Total"), rows);
+        } catch (IllegalArgumentException e) {
+            io.printError("Unknown order status");
         }
     }
 

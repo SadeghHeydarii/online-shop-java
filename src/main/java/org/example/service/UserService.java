@@ -3,16 +3,19 @@ package org.example.service;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import org.example.exception.DuplicateUserException;
 import org.example.exception.InvalidInputException;
 import org.example.exception.UserNotFoundException;
 import org.example.model.entity.User;
 import org.example.model.vo.Address;
+import org.example.model.vo.ContactInfo;
 
 /**
  * Service managing customer profile information and delivery address books.
  *
  * <p>Coordinates use cases DS 04 (Profile and Address Management), US 05 (View/Edit Profile),
- * US 06 (Add/Remove Addresses), and US 07 (Set Default Address).
+ * US 06 (Add/Remove Addresses), and US 07 (Set Default Address). Enforces mobile phone uniqueness
+ * and address ownership.
  */
 public class UserService {
 
@@ -54,7 +57,7 @@ public class UserService {
         if (userId == null || userId.isBlank()) {
             throw new InvalidInputException("User ID cannot be null or blank");
         }
-        User user = userStore.get(userId);
+        User user = userStore.get(userId.trim());
         if (user == null) {
             throw new UserNotFoundException("User not found with ID: " + userId);
         }
@@ -62,30 +65,44 @@ public class UserService {
     }
 
     /**
-     * Updates personal details (full name and phone number) in the user's profile.
+     * Updates personal details (full name and phone number) in the user's profile,
+     * ensuring mobile number uniqueness across the system.
      *
      * <p><b>Contract:</b>
      * <ul>
-     *   <li><b>REQUIRES:</b> user exists, {@code fullName} non-blank, {@code phone} non-blank</li>
+     *   <li><b>REQUIRES:</b> user exists, {@code fullName} non-blank, {@code phone} valid format and unique across accounts</li>
      *   <li><b>MODIFIES:</b> {@code userStore}</li>
-     *   <li><b>EFFECTS:</b> Retrieves user and calls {@code user.updateProfile(fullName, phone)}.</li>
+     *   <li><b>EFFECTS:</b> Validates uniqueness, updates profile name and phone; throws {@link DuplicateUserException}
+     *       if phone is already assigned to another account.</li>
      * </ul>
      *
      * @param userId   the unique identifier of the user
      * @param fullName the new full name
      * @param phone    the new telephone contact number
-     * @throws InvalidInputException if any argument is null or blank
-     * @throws UserNotFoundException if user does not exist
+     * @throws InvalidInputException  if any argument is invalid
+     * @throws DuplicateUserException if the mobile number is already in use by another account
+     * @throws UserNotFoundException  if user does not exist
      */
     public void updateProfile(String userId, String fullName, String phone) {
         if (fullName == null || fullName.isBlank()) {
-            throw new InvalidInputException("Full name cannot be null or blank");
+            throw new InvalidInputException("Full name cannot be blank");
         }
-        if (phone == null || phone.isBlank()) {
-            throw new InvalidInputException("Phone cannot be null or blank");
+        synchronized (userStore) {
+            User user = getProfile(userId);
+            ContactInfo contact;
+            try {
+                contact = new ContactInfo(user.getEmail(), phone);
+            } catch (IllegalArgumentException e) {
+                throw new InvalidInputException(e.getMessage());
+            }
+            boolean duplicate = userStore.values().stream()
+                    .anyMatch(other -> !other.getId().equals(user.getId())
+                            && !contact.phone().isEmpty() && other.getPhone().equals(contact.phone()));
+            if (duplicate) {
+                throw new DuplicateUserException("Mobile number is already registered");
+            }
+            user.updateProfile(fullName.trim(), contact.phone());
         }
-        User user = getProfile(userId);
-        user.updateProfile(fullName, phone);
     }
 
     /**
@@ -108,6 +125,27 @@ public class UserService {
             throw new InvalidInputException("Address cannot be null");
         }
         User user = getProfile(userId);
+        user.addAddress(address);
+    }
+
+    /**
+     * Updates an existing delivery address belonging to the user.
+     *
+     * @param userId  the unique identifier of the user
+     * @param address the modified address (matching an existing addressId)
+     * @throws InvalidInputException if address is null or does not belong to the user
+     * @throws UserNotFoundException if user does not exist
+     */
+    public void updateAddress(String userId, Address address) {
+        if (address == null) {
+            throw new InvalidInputException("Address cannot be null");
+        }
+        User user = getProfile(userId);
+        boolean owned = user.getAddresses().stream()
+                .anyMatch(existing -> existing.addressId().equals(address.addressId()));
+        if (!owned) {
+            throw new InvalidInputException("Address does not belong to this user");
+        }
         user.addAddress(address);
     }
 

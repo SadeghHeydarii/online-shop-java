@@ -9,7 +9,7 @@ import java.util.Objects;
  * <p>Abstraction Function:
  * AF(r) = a customer product review identified by r.reviewId, authored by user r.userId
  *         (display name r.authorName), rating product r.productId with r.rating stars (1-5),
- *         commentary r.commentText, recorded at r.createdAt.
+ *         commentary r.commentText (up to 2000 characters), recorded at r.createdAt.
  *
  * <p>Representation Invariant:
  * RI: reviewId != null && !reviewId.isBlank()
@@ -17,7 +17,7 @@ import java.util.Objects;
  *     && authorName != null && !authorName.isBlank()
  *     && productId != null && !productId.isBlank()
  *     && rating >= 1 && rating <= 5
- *     && commentText != null && !commentText.isBlank()
+ *     && commentText != null && !commentText.isBlank() && commentText.length() <= 2000
  *     && createdAt != null.
  *
  * @param reviewId    The unique review identifier.
@@ -25,7 +25,7 @@ import java.util.Objects;
  * @param authorName  The reviewer's display name.
  * @param productId   The reviewed product's identifier.
  * @param rating      The integer star rating from 1 to 5.
- * @param commentText The written feedback text.
+ * @param commentText The written feedback text (maximum 2000 characters).
  * @param createdAt   The creation timestamp.
  */
 public record Review(
@@ -38,7 +38,7 @@ public record Review(
         LocalDateTime createdAt) {
 
     /**
-     * Compact constructor validating review invariants.
+     * Compact constructor validating review invariants and comment length bounds.
      */
     public Review {
         Objects.requireNonNull(reviewId, "reviewId cannot be null");
@@ -64,8 +64,8 @@ public record Review(
             throw new IllegalArgumentException(
                     "Rating must be between 1 and 5, but received: " + rating);
         }
-        if (commentText.isBlank()) {
-            throw new IllegalArgumentException("commentText cannot be blank");
+        if (commentText.isBlank() || commentText.length() > 2000) {
+            throw new IllegalArgumentException("Review text must contain 1 to 2000 characters");
         }
     }
 }
