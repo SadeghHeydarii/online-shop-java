@@ -59,19 +59,19 @@ class AuthServiceTest {
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {" ", "invalid-email", "noatsign.com"})
-    @DisplayName("register() rejects invalid email address")
+    @DisplayName("register() rejects a missing or invalid sole email identifier")
     void testRegisterInvalidEmail(String invalidEmail) {
         assertThrows(InvalidInputException.class, () ->
-                authService.register("Sara Ahmadi", invalidEmail, "09121113344", "secret123"));
+                authService.register("Sara Ahmadi", invalidEmail, "", "secret123"));
     }
 
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {" ", "\t", "\n"})
-    @DisplayName("register() rejects invalid phone number")
+    @DisplayName("register() rejects a missing or invalid sole mobile identifier")
     void testRegisterInvalidPhone(String invalidPhone) {
         assertThrows(InvalidInputException.class, () ->
-                authService.register("Sara Ahmadi", "user@aut.ac.ir", invalidPhone, "secret123"));
+                authService.register("Sara Ahmadi", "", invalidPhone, "secret123"));
     }
 
     @ParameterizedTest

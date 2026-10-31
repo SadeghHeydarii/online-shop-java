@@ -44,7 +44,7 @@ class AddressTest {
         assertThrows(
                 RuntimeException.class,
                 () -> new Address(
-                        invalidId, "Ali", "0912", "Tehran", "Tehran", "Street", "12345", "Home", false));
+                        invalidId, "Ali", "09121234567", "Tehran", "Tehran", "Street", "1234567890", "Home", false));
     }
 
     @ParameterizedTest
@@ -55,7 +55,7 @@ class AddressTest {
         assertThrows(
                 RuntimeException.class,
                 () -> new Address(
-                        "ADDR-1", invalidName, "0912", "Tehran", "Tehran", "Street", "12345", "Home", false));
+                        "ADDR-1", invalidName, "09121234567", "Tehran", "Tehran", "Street", "1234567890", "Home", false));
     }
 
     @ParameterizedTest
@@ -66,14 +66,25 @@ class AddressTest {
         assertThrows(
                 RuntimeException.class,
                 () -> new Address(
-                        "ADDR-1", "Ali", "0912", "Tehran", "Tehran", invalidStreet, "12345", "Home", false));
+                        "ADDR-1", "Ali", "09121234567", "Tehran", "Tehran", invalidStreet, "1234567890", "Home", false));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"12345", "123456789", "12345678901", "letters123"})
+    @DisplayName("Should reject invalid or non-10-digit postal code")
+    void shouldRejectInvalidPostalCode(String invalidPostal) {
+        assertThrows(
+                RuntimeException.class,
+                () -> new Address(
+                        "ADDR-1", "Ali", "09121234567", "Tehran", "Tehran", "Street", invalidPostal, "Home", false));
     }
 
     @Test
     @DisplayName("Should produce a new Address instance with updated isDefault flag")
     void shouldProduceNewAddressWithDefault() {
         Address original = new Address(
-                "ADDR-1", "Ali", "0912", "Tehran", "Tehran", "Street", "12345", "Home", false);
+                "ADDR-1", "Ali", "09121234567", "Tehran", "Tehran", "Street", "1234567890", "Home", false);
 
         Address modified = original.withDefault(true);
 
@@ -112,11 +123,11 @@ class AddressTest {
     @DisplayName("Should verify structural equality and hashCode for Address records")
     void shouldVerifyStructuralEquality() {
         Address a1 = new Address(
-                "ADDR-1", "Ali", "0912", "Tehran", "Tehran", "Street", "12345", "Home", false);
+                "ADDR-1", "Ali", "09121234567", "Tehran", "Tehran", "Street", "1234567890", "Home", false);
         Address a2 = new Address(
-                "ADDR-1", "Ali", "0912", "Tehran", "Tehran", "Street", "12345", "Home", false);
+                "ADDR-1", "Ali", "09121234567", "Tehran", "Tehran", "Street", "1234567890", "Home", false);
         Address a3 = new Address(
-                "ADDR-2", "Ali", "0912", "Tehran", "Tehran", "Street", "12345", "Home", false);
+                "ADDR-2", "Ali", "09121234567", "Tehran", "Tehran", "Street", "1234567890", "Home", false);
 
         assertEquals(a1, a2);
         assertEquals(a1.hashCode(), a2.hashCode());
