@@ -14,11 +14,11 @@ import java.util.Objects;
  * <p>Representation Invariant:
  * RI: addressId != null && !addressId.isBlank()
  *     && recipientName != null && !recipientName.isBlank()
- *     && phone != null && !phone.isBlank()
+ *     && phone != null && phone matches valid telephone format
  *     && province != null && !province.isBlank()
  *     && city != null && !city.isBlank()
  *     && streetAddress != null && !streetAddress.isBlank()
- *     && postalCode != null && !postalCode.isBlank()
+ *     && postalCode != null && postalCode matches exactly 10 digits ("[0-9]{10}")
  *     && title != null && !title.isBlank().
  *
  * @param addressId     The local address identifier (e.g., "ADDR-1").
@@ -27,7 +27,7 @@ import java.util.Objects;
  * @param province      The destination province.
  * @param city          The destination city.
  * @param streetAddress The detailed street and building address.
- * @param postalCode    The postal code.
+ * @param postalCode    The 10-digit postal code.
  * @param title         The address title (e.g., "Home", "Work").
  * @param isDefault     Flag indicating whether this is the default address.
  */
@@ -43,7 +43,8 @@ public record Address(
         boolean isDefault) {
 
     /**
-     * Compact constructor enforcing non-null and non-blank invariants on all string fields.
+     * Compact constructor enforcing non-null and non-blank invariants on all string fields,
+     * normalizing phone numbers via {@link ContactInfo}, and ensuring a 10-digit postal code.
      */
     public Address {
         Objects.requireNonNull(addressId, "addressId cannot be null");
@@ -61,9 +62,7 @@ public record Address(
         if (recipientName.isBlank()) {
             throw new IllegalArgumentException("recipientName cannot be blank");
         }
-        if (phone.isBlank()) {
-            throw new IllegalArgumentException("phone cannot be blank");
-        }
+        phone = new ContactInfo("", phone).phone();
         if (province.isBlank()) {
             throw new IllegalArgumentException("province cannot be blank");
         }
@@ -73,12 +72,19 @@ public record Address(
         if (streetAddress.isBlank()) {
             throw new IllegalArgumentException("streetAddress cannot be blank");
         }
-        if (postalCode.isBlank()) {
-            throw new IllegalArgumentException("postalCode cannot be blank");
+        postalCode = postalCode.trim();
+        if (!postalCode.matches("[0-9]{10}")) {
+            throw new IllegalArgumentException("Postal code must contain exactly 10 digits");
         }
         if (title.isBlank()) {
             throw new IllegalArgumentException("title cannot be blank");
         }
+        addressId = addressId.trim();
+        recipientName = recipientName.trim();
+        province = province.trim();
+        city = city.trim();
+        streetAddress = streetAddress.trim();
+        title = title.trim();
     }
 
     /**

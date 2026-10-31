@@ -186,6 +186,23 @@ public class Cart {
     }
 
     /**
+     * Removes only the line items that were successfully checked out in the specified snapshot,
+     * leaving intact any items added concurrently.
+     *
+     * @param snapshot the list of checked-out cart items to remove (non-null)
+     * @throws NullPointerException if snapshot is null
+     */
+    public void removeCheckedOutItems(List<CartItem> snapshot) {
+        Objects.requireNonNull(snapshot, "Checkout snapshot cannot be null");
+        for (CartItem checkedOut : snapshot) {
+            if (items.get(checkedOut.productId()) == checkedOut) {
+                items.remove(checkedOut.productId());
+            }
+        }
+        checkRep();
+    }
+
+    /**
      * Returns the quantity of the specified product currently in the cart.
      *
      * @param productId the product identifier

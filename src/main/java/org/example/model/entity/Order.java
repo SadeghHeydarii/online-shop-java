@@ -352,7 +352,7 @@ public class Order {
      * @throws IllegalStateException if the order is not in PENDING status
      */
     public void markAsPaymentFailed() {
-        if (status != OrderStatus.PENDING) {
+        if (status != OrderStatus.PENDING && status != OrderStatus.PAYMENT_FAILED) {
             throw new IllegalStateException("Cannot mark payment failed from status: " + status);
         }
         this.status = OrderStatus.PAYMENT_FAILED;

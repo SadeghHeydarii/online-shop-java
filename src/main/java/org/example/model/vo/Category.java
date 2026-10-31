@@ -5,7 +5,7 @@ package org.example.model.vo;
  *
  * <p>Abstraction Function:
  * AF(c) = a product catalog category identified by {@code c.id}, named {@code c.name},
- *         and described by {@code c.description}.
+ *         described by {@code c.description}, with active availability status {@code c.active}.
  *
  * <p>Representation Invariant:
  * <ul>
@@ -17,8 +17,9 @@ package org.example.model.vo;
  * @param id          unique category identifier (non-null, non-blank)
  * @param name        descriptive display name of the category (non-null, non-blank)
  * @param description explanatory summary of the category (non-null, non-blank)
+ * @param active      whether the category is currently active in the catalog
  */
-public record Category(String id, String name, String description) {
+public record Category(String id, String name, String description, boolean active) {
 
     /**
      * Compact constructor enforcing non-null and non-blank invariants.
@@ -38,5 +39,16 @@ public record Category(String id, String name, String description) {
         id = id.trim();
         name = name.trim();
         description = description.trim();
+    }
+
+    /**
+     * Backward-compatible convenience constructor defaulting active status to {@code true}.
+     *
+     * @param id          unique category identifier (non-null, non-blank)
+     * @param name        descriptive display name of the category (non-null, non-blank)
+     * @param description explanatory summary of the category (non-null, non-blank)
+     */
+    public Category(String id, String name, String description) {
+        this(id, name, description, true);
     }
 }
