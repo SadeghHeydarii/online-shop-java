@@ -1,0 +1,21 @@
+flowchart TD
+    Start([شروع برنامه Main]) --> LoginCheck{کاربر لاگین کرده؟}
+    LoginCheck -- خیر --> Guest[GuestMenu
+منوی مهمان]
+    Guest --> AuthAction[ورود / ثبت‌نام / بازیابی رمز]
+    Guest --> CatalogShared1[CatalogMenu
+مرور و جستجوی کاتالوگ]
+    AuthAction --> LoginCheck
+    CatalogShared1 --> Guest
+    LoginCheck -- بله --> RoleCheck{نقش کاربر چیست؟}
+    RoleCheck -- CUSTOMER --> CustMenu[CustomerMenu
+پنل مشتری]
+    CustMenu --> CustActions[پروفایل و نشانی‌ها / سبد خرید / تسویه و پرداخت / تاریخچه سفارش‌ها / ثبت نظر]
+    CustMenu --> CatalogShared2[CatalogMenu
+مرور و جستجوی کاتالوگ]
+    RoleCheck -- ADMIN --> AdminMenu[AdminMenu
+پنل مدیریت فروشگاه]
+    AdminMenu --> AdminActions[مدیریت کالاها و تصاویر / تنظیم موجودی / مدیریت و فیلتر سفارش‌ها]
+    CustActions --> CustMenu
+    CatalogShared2 --> CustMenu
+    AdminActions --> AdminMenu

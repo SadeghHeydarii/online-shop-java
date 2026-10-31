@@ -1,0 +1,14 @@
+stateDiagram-v2
+    [*] --> PENDING : ثبت سفارش (checkout)
+    PENDING --> PAID : پرداخت موفق (processPayment=true)
+    PENDING --> PAYMENT_FAILED : خطای پرداخت (processPayment=false)
+    PAYMENT_FAILED --> PAID : تلاش مجدد موفق
+    PAYMENT_FAILED --> PAYMENT_FAILED : تلاش مجدد ناموفق
+    PAYMENT_FAILED --> CANCELLED : انصراف کاربر / عدم پرداخت
+    PENDING --> CANCELLED : لغو توسط کاربر
+    PAID --> CANCELLED : لغو پیش از پردازش (با استرداد وجه و بازگشت موجودی)
+    PAID --> PROCESSING : تأیید و آماده‌سازی در انبار
+    PROCESSING --> SHIPPED : تحویل به پست / پیک
+    SHIPPED --> DELIVERED : تحویل موفق به مشتری
+    DELIVERED --> [*]
+    CANCELLED --> [*]

@@ -1,0 +1,339 @@
+classDiagram
+    direction TB
+
+    namespace Entities {
+        class User {
+            -String id
+            -String fullName
+            -String email
+            -String phone
+            -String passwordHash
+            -UserRole role
+            -boolean active
+            -LocalDateTime createdAt
+            -List~Address~ addresses
+            +User(String, String, String, String, String, UserRole, LocalDateTime)
+            +getId() String
+            +getFullName() String
+            +getEmail() String
+            +getPhone() String
+            +getRole() UserRole
+            +isActive() boolean
+            +activate() void
+            +deactivate() void
+            +updateProfile(String, String) void
+            +changePassword(String) void
+            +addAddress(Address) void
+            +removeAddress(String) void
+            +setDefaultAddress(String) void
+            +getDefaultAddress() Optional~Address~
+            +getAddresses() List~Address~
+            +getCreatedAt() LocalDateTime
+        }
+
+        class Product {
+            -String id
+            -String name
+            -String description
+            -Money price
+            -int availableStock
+            -String categoryId
+            -boolean active
+            -double averageRating
+            -int reviewCount
+            -LocalDateTime createdAt
+            -int soldCount
+            -List~String~ imageUrls
+            +Product(String, String, String, Money, int, String)
+            +getId() String
+            +getName() String
+            +getDescription() String
+            +getPrice() Money
+            +getAvailableStock() int
+            +getCategoryId() String
+            +getAverageRating() double
+            +getReviewCount() int
+            +getCreatedAt() LocalDateTime
+            +getSoldCount() int
+            +getImageUrls() List~String~
+            +isAvailable(Quantity) boolean
+            +isActive() boolean
+            +updateDetails(String, String, Money, String) void
+            +setActive(boolean) void
+            +deductStock(Quantity) void
+            +restock(Quantity) void
+            +recordSale(Quantity) void
+            +setImageUrls(List~String~) void
+            +updateRatingStats(int) void
+        }
+
+        class Cart {
+            -String cartId
+            -String userId
+            -Map~String, CartItem~ items
+            +Cart(String, String)
+            +Cart(String)
+            +getCartId() String
+            +getUserId() String
+            +addProduct(Product, Quantity) void
+            +updateQuantity(String, Quantity) void
+            +removeProduct(String) void
+            +removeCheckedOutItems(List~CartItem~) void
+            +clear() void
+            +quantityOf(String) int
+            +calculateSubtotal() Money
+            +isEmpty() boolean
+            +getItems() List~CartItem~
+        }
+
+        class Order {
+            -String orderId
+            -String userId
+            -List~OrderItem~ items
+            -Address deliveryAddress
+            -Money itemsSubtotal
+            -Money discountAmount
+            -Money shippingFee
+            -Money payableAmount
+            -OrderStatus status
+            -LocalDateTime createdAt
+            -LocalDateTime paidAt
+            +Order(String, String, List~OrderItem~, Address, Money, Money, Money, Money, LocalDateTime)
+            +getOrderId() String
+            +getUserId() String
+            +getStatus() OrderStatus
+            +getItemsSubtotal() Money
+            +getDiscountAmount() Money
+            +getShippingFee() Money
+            +getPayableAmount() Money
+            +getItems() List~OrderItem~
+            +getDeliveryAddress() Address
+            +getCreatedAt() LocalDateTime
+            +getPaidAt() Optional~LocalDateTime~
+            +markAsPaid(LocalDateTime) void
+            +markAsPaymentFailed() void
+            +updateStatus(OrderStatus) void
+            +cancel() void
+            +canBeCancelled() boolean
+        }
+    }
+
+    namespace ValueObjects_And_Records {
+        class ContactInfo {
+            <<ValueObject>>
+            -String email
+            -String phone
+            +ContactInfo(String, String)
+            +email() String
+            +phone() String
+            +hasEmail() boolean
+            +hasPhone() boolean
+        }
+
+        class Address {
+            <<ValueObject>>
+            -String addressId
+            -String recipientName
+            -String phone
+            -String province
+            -String city
+            -String streetAddress
+            -String postalCode
+            -String title
+            -boolean isDefault
+            +Address(String, String, String, String, String, String, String, String, boolean)
+            +addressId() String
+            +recipientName() String
+            +phone() String
+            +province() String
+            +city() String
+            +streetAddress() String
+            +postalCode() String
+            +title() String
+            +isDefault() boolean
+            +withDefault(boolean) Address
+            +fullAddressText() String
+        }
+
+        class Category {
+            <<ValueObject>>
+            -String id
+            -String name
+            -String description
+            -boolean active
+            +Category(String, String, String)
+            +Category(String, String, String, boolean)
+            +id() String
+            +name() String
+            +description() String
+            +active() boolean
+        }
+
+        class CartItem {
+            <<ValueObject>>
+            -String productId
+            -String productName
+            -Money unitPrice
+            -Quantity quantity
+            +CartItem(String, String, Money, Quantity)
+            +productId() String
+            +productName() String
+            +unitPrice() Money
+            +quantity() Quantity
+            +getLineTotal() Money
+            +withQuantity(Quantity) CartItem
+        }
+
+        class OrderItem {
+            <<ValueObject>>
+            -String productId
+            -String productName
+            -Money unitPrice
+            -Quantity quantity
+            -Money lineTotal
+            +OrderItem(String, String, Money, Quantity)
+            +productId() String
+            +productName() String
+            +unitPrice() Money
+            +quantity() Quantity
+            +lineTotal() Money
+        }
+
+        class Coupon {
+            <<ValueObject>>
+            -String code
+            -int discountPercent
+            -Money maxDiscount
+            -Money minOrderAmount
+            -LocalDate expiryDate
+            +Coupon(String, int, Money, Money, LocalDate)
+            +code() String
+            +discountPercent() int
+            +maxDiscount() Money
+            +minOrderAmount() Money
+            +expiryDate() LocalDate
+            +calculateDiscount(Money) Money
+            +isValid(Money, LocalDate) boolean
+        }
+
+        class PaymentTransaction {
+            <<ValueObject>>
+            -String transactionId
+            -String orderId
+            -Money amount
+            -PaymentMethod method
+            -PaymentStatus status
+            -LocalDateTime timestamp
+            -String referenceCode
+            +PaymentTransaction(String, String, Money, PaymentMethod, PaymentStatus, LocalDateTime, String)
+            +transactionId() String
+            +orderId() String
+            +amount() Money
+            +method() PaymentMethod
+            +status() PaymentStatus
+            +timestamp() LocalDateTime
+            +referenceCode() String
+        }
+
+        class Money {
+            <<ValueObject>>
+            -BigDecimal amount
+            -String currency
+            +ZERO$ Money
+            +Money(BigDecimal, String)
+            +amount() BigDecimal
+            +currency() String
+            +add(Money) Money
+            +subtract(Money) Money
+            +multiply(Quantity) Money
+            +isLessThan(Money) boolean
+            +isNegative() boolean
+        }
+
+        class Quantity {
+            <<ValueObject>>
+            -int value
+            +Quantity(int)
+            +value() int
+            +add(Quantity) Quantity
+            +subtract(Quantity) Quantity
+            +isGreaterThan(Quantity) boolean
+        }
+
+        class Review {
+            <<ValueObject>>
+            -String reviewId
+            -String userId
+            -String authorName
+            -String productId
+            -int rating
+            -String commentText
+            -LocalDateTime createdAt
+            +Review(String, String, String, String, int, String, LocalDateTime)
+            +reviewId() String
+            +userId() String
+            +authorName() String
+            +productId() String
+            +rating() int
+            +commentText() String
+            +createdAt() LocalDateTime
+        }
+    }
+
+    namespace Enumerations {
+        class UserRole {
+            <<enumeration>>
+            CUSTOMER
+            ADMIN
+            STOREKEEPER
+        }
+
+        class OrderStatus {
+            <<enumeration>>
+            PENDING
+            PAYMENT_FAILED
+            PAID
+            PROCESSING
+            SHIPPED
+            DELIVERED
+            CANCELLED
+        }
+
+        class PaymentMethod {
+            <<enumeration>>
+            ONLINE_GATEWAY
+            WALLET
+            CASH_ON_DELIVERY
+        }
+
+        class PaymentStatus {
+            <<enumeration>>
+            SUCCESS
+            FAILED
+            CANCELLED
+        }
+    }
+
+
+    User "1" *-- "0..*" Address : contains
+    User "1" --> "1" UserRole : has
+    User "1" --> "0..1" Cart : owns
+    User "1" *-- "1" ContactInfo : contacts
+    Product --> "1" Money : costs
+    Product --> "1" Category : belongs to
+    Product "1" o-- "0..*" Review : receives
+    Review --> "1" User : authored by
+    Cart "1" *-- "0..*" CartItem : contains
+    CartItem --> "1" Quantity : measured by
+    CartItem --> "1" Money : priced by
+    CartItem --> "1" Product : references
+    Order "1" *-- "1..*" OrderItem : contains
+    Order "1" --> "1" Address : delivers to
+    Order "1" --> "1" OrderStatus : tracked by
+    Order "1" --> "0..*" PaymentTransaction : records
+    Order --> "0..1" Coupon : applies
+    Order --> "4" Money : totals
+    OrderItem --> "1" Money : priced by
+    OrderItem --> "1" Quantity : counted by
+    PaymentTransaction --> "1" PaymentMethod : via
+    PaymentTransaction --> "1" PaymentStatus : results in

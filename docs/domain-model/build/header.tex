@@ -1,0 +1,145 @@
+% =========================================================================
+% Preamble & Style Definitions for Domain Model Technical Specification
+% Amirkabir University of Technology - Software Design
+% =========================================================================
+
+% --- Geometry & Margins ---
+\usepackage[top=2.8cm,bottom=2.5cm,right=2.2cm,left=2.2cm,headheight=50pt,headsep=12pt,footskip=1.2cm]{geometry}
+
+% --- Essential Packages ---
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\linespread{1.14}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+
+% --- Color Palette ---
+\definecolor{autnavy}{RGB}{26, 54, 93}       % Deep Navy #1A365D
+\definecolor{autblue}{RGB}{43, 108, 176}     % Royal Blue #2B6CB0
+\definecolor{autteal}{RGB}{44, 122, 123}     % Emerald Teal #2C7A7B
+\definecolor{cardbg}{RGB}{247, 250, 252}     % Light gray-blue #F7FAFC
+\definecolor{bordercol}{RGB}{203, 213, 224}  % Border #CBD5E0
+\definecolor{codebg}{RGB}{245, 247, 250}     % Code background
+\definecolor{darkred}{RGB}{155, 44, 44}      % Alert red #9B2C2C
+\definecolor{lightred}{RGB}{255, 245, 245}   % Alert light red
+
+% --- Hyperref ---
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=autblue,
+    citecolor=autteal,
+    urlcolor=autblue,
+    pdftitle={سند جامع مشخصات مدل دامنه - فروشگاه آنلاین},
+    pdfauthor={دانشگاه صنعتی امیرکبیر - اصول طراحی نرم‌افزار},
+    pdfsubject={Domain Model Technical Specification}
+}
+
+% --- Header and Footer Styling ---
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.6pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{bordercol}\leaders\hrule height \headrulewidth\hfill}}
+\rhead{\small\color{gray}اصول طراحی نرم‌افزار --- دانشگاه صنعتی امیرکبیر}
+\lhead{\small\color{gray}سند جامع مشخصات مدل دامنه}
+\cfoot{\thepage}
+
+% --- Section Title Styling without titlesec ---
+\makeatletter
+\renewcommand{\section}{\@startsection{section}{1}{\z@}%
+  {-3.5ex \@plus -1ex \@minus -.2ex}%
+  {2.3ex \@plus.2ex}%
+  {\normalfont\Large\bfseries\color{autnavy}}}
+\renewcommand{\subsection}{\@startsection{subsection}{2}{\z@}%
+  {-3.25ex\@plus -1ex \@minus -.2ex}%
+  {1.5ex \@plus .2ex}%
+  {\normalfont\large\bfseries\color{autblue}}}
+\renewcommand{\subsubsection}{\@startsection{subsubsection}{3}{\z@}%
+  {-3.25ex\@plus -1ex \@minus -.2ex}%
+  {1.5ex \@plus .2ex}%
+  {\normalfont\normalsize\bfseries\color{autteal}}}
+\makeatother
+
+% --- Code Listing Style (Java) ---
+\lstdefinestyle{javastyle}{
+    backgroundcolor=\color{codebg},
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{autblue}\bfseries,
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{autteal},
+    numberstyle=\tiny\color{gray},
+    numbers=left,
+    numbersep=8pt,
+    stepnumber=1,
+    tabsize=4,
+    showspaces=false,
+    showstringspaces=false,
+    breaklines=true,
+    breakatwhitespace=true,
+    frame=single,
+    rulecolor=\color{bordercol},
+    frameround=tttt,
+    xleftmargin=12pt,
+    framexleftmargin=10pt
+}
+
+% --- TColorBoxes ---
+\newtcolorbox{contractbox}[1][]{
+    enhanced,
+    breakable,
+    colback=codebg,
+    colframe=autteal,
+    fonttitle=\bfseries\small,
+    title={قرارداد متدها \lr{(Specification Contract)}},
+    boxrule=0.9pt,
+    arc=3pt,
+    left=8pt, right=8pt, top=6pt, bottom=6pt,
+    coltitle=white,
+    #1
+}
+
+\newtcolorbox{alertbox}[1][]{
+    enhanced,
+    breakable,
+    colback=lightred,
+    colframe=darkred,
+    fonttitle=\bfseries\small,
+    title=نکته مهم و مرز قطعی کار,
+    boxrule=1.1pt,
+    arc=4pt,
+    left=10pt, right=10pt, top=8pt, bottom=8pt,
+    coltitle=white,
+    #1
+}
+
+\newtcolorbox{notebox}[1][]{
+    enhanced,
+    breakable,
+    colback=cardbg,
+    colframe=autblue,
+    fonttitle=\bfseries\small,
+    title=توضیح معماری و توجیه طراحی,
+    boxrule=0.9pt,
+    arc=3pt,
+    left=8pt, right=8pt, top=6pt, bottom=6pt,
+    coltitle=white,
+    #1
+}
+
+% --- Persian Configuration (Must be loaded last) ---
+\usepackage{xepersian}
+\settextfont[Path=assets/fonts/, BoldFont=Vazirmatn-Bold.ttf, ItalicFont=Vazirmatn-Medium.ttf]{Vazirmatn-Medium.ttf}
+\setlatintextfont[Scale=0.92]{Arial}
+\setmonofont[Scale=0.88]{Consolas}
+
+\providecommand{\UseMathForPositioningText}{}

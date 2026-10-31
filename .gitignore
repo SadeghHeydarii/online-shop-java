@@ -25,3 +25,9 @@ Desktop.ini
 *.zip
 *.tar.gz
 *.rar
+
+# LaTeX auxiliary files
+*.aux
+*.out
+*.toc
+*.synctex.gz

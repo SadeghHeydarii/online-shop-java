@@ -1,0 +1,85 @@
+classDiagram
+    direction TB
+
+    class AuthService {
+        -Map~String, User~ userStore
+        -Map~String, String~ activeSessions
+        -Map~String, PasswordReset~ passwordResetStore
+        +register(String fullName, String email, String phone, String password) User
+        +login(String identifier, String password) String
+        +logout(String sessionToken) void
+        +getAuthenticatedUser(String sessionToken) User
+        +requestPasswordReset(String identifier) PasswordReset
+        +resetPassword(String code, String newPassword) boolean
+    }
+
+    class UserService {
+        -Map~String, User~ userStore
+        +getProfile(String userId) User
+        +updateProfile(String userId, String fullName, String phone) void
+        +addAddress(String userId, Address address) void
+        +updateAddress(String userId, Address address) void
+        +removeAddress(String userId, String addressId) void
+        +setDefaultAddress(String userId, String addressId) void
+    }
+
+    class ProductService {
+        -Map~String, Product~ productStore
+        -Map~String, Category~ categoryStore
+        +getAllProducts() List~Product~
+        +getAllActiveProducts() List~Product~
+        +getProductById(String productId) Product
+        +requireAvailableProduct(String productId) Product
+        +searchProducts(String query) List~Product~
+        +filterAndSort(String categoryId, Money minPrice, Money maxPrice, String sortBy) List~Product~
+        +addProduct(String name, String desc, Money price, int stock, String categoryId) void
+        +updateProduct(String productId, String name, String desc, Money price, String categoryId) void
+        +setProductImages(String productId, List~String~ imageUrls) void
+        +deactivateProduct(String productId) void
+        +adjustStock(String productId, int delta) void
+    }
+
+    class CartService {
+        -Map~String, Cart~ cartStore
+        -ProductService productService
+        +getCart(String userId) Cart
+        +addItem(String userId, String productId, Quantity quantity) void
+        +updateItemQuantity(String userId, String productId, Quantity quantity) void
+        +removeItem(String userId, String productId) void
+        +removeCheckedOutItems(String userId, List~CartItem~ checkedOutItems) void
+        +clearCart(String userId) void
+    }
+
+    class OrderService {
+        -Map~String, Order~ orderStore
+        -Map~String, Coupon~ couponStore
+        -CartService cartService
+        -ProductService productService
+        -UserService userService
+        +checkout(String userId, String addressId, String couponCode) Order
+        +processPayment(String orderId, PaymentMethod method, boolean simulateSuccess) boolean
+        +processPayment(String orderId, String userId, PaymentMethod method, boolean simulateSuccess) boolean
+        +cancelOrder(String orderId) boolean
+        +cancelOrder(String orderId, String userId) boolean
+        +getOrderHistory(String userId) List~Order~
+        +getOrderDetails(String orderId) Order
+        +getOrderDetails(String orderId, String userId) Order
+        +getAllOrders() List~Order~
+        +getOrdersByStatus(OrderStatus status) List~Order~
+        +updateOrderStatus(String orderId, OrderStatus newStatus) void
+    }
+
+    class ReviewService {
+        -Map~String, List~Review~~ productReviewsStore
+        -OrderService orderService
+        -ProductService productService
+        +addReview(String userId, String authorName, String productId, int rating, String comment) void
+        +getProductReviews(String productId) List~Review~
+    }
+
+    CartService ..> ProductService : checks stock
+    OrderService ..> CartService : clears/updates cart
+    OrderService ..> ProductService : deducts/restocks & records sale
+    OrderService ..> UserService : validates address & user
+    ReviewService ..> OrderService : verifies purchase
+    ReviewService ..> ProductService : updates rating

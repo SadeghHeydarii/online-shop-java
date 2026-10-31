@@ -1,0 +1,30 @@
+classDiagram
+    direction TB
+    class DomainConcept {
+        <<Concept>>
+    }
+    class Entity {
+        <<Identity & Lifecycle>>
+        +Identity id
+        +equals(byId)
+    }
+    class ValueObject {
+        <<Immutable & Record>>
+        +equals(byValue)
+    }
+    DomainConcept <|-- Entity
+    DomainConcept <|-- ValueObject
+    Entity <|-- User
+    Entity <|-- Product
+    Entity <|-- Cart
+    Entity <|-- Order
+    ValueObject <|-- Quantity
+    ValueObject <|-- Money
+    ValueObject <|-- Address
+    ValueObject <|-- CartItem
+    ValueObject <|-- OrderItem
+    ValueObject <|-- Review
+    ValueObject <|-- Coupon
+    ValueObject <|-- Category
+    ValueObject <|-- PaymentTransaction
+    ValueObject <|-- ContactInfo
