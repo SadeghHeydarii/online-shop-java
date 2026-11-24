@@ -3,7 +3,7 @@ package org.example.exception;
 /**
  * Domain exception thrown when a requested product cannot be found in the catalog.
  */
-public class ProductNotFoundException extends RuntimeException {
+public class ProductNotFoundException extends ShopException {
 
     /**
      * Constructs a new ProductNotFoundException with the specified detail message.
