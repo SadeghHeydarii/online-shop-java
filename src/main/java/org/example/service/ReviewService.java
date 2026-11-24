@@ -1,5 +1,6 @@
 package org.example.service;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -13,82 +14,87 @@ import org.example.model.entity.Order;
 import org.example.model.entity.Product;
 import org.example.model.enums.OrderStatus;
 import org.example.model.vo.Review;
+import org.example.service.api.ProductLookupPort;
+import org.example.service.api.PurchaseHistoryQuery;
+import org.example.service.api.ReviewUseCase;
+import org.example.service.port.IdGenerator;
+import org.example.service.port.ReviewRepository;
 
 /**
- * Application service managing product ratings and customer reviews.
- * Enforces verified-purchase constraints, character limits, and synchronizes aggregate rating metrics on products.
- *
- * <p>Specification compliance:
- * <ul>
- *   <li>Conforms strictly to Section 5.6 and Figure 2 of domain-model-specification.</li>
- *   <li>Requires users to have purchased the product in a paid or delivered order before leaving a review.</li>
- *   <li>Enforces comment text length boundaries (1 to {@value #MAX_REVIEW_LENGTH} characters).</li>
- *   <li>Automatically updates the product's running rating statistics via {@link Product#updateRatingStats(int)}.</li>
- * </ul>
+ * Application service managing product ratings and verified-purchase customer reviews
+ * via segregated review, product-lookup, purchase-history, ID, and time ports (SRP, ISP, DIP).
  */
-public class ReviewService {
+public class ReviewService implements ReviewUseCase {
 
     public static final int MAX_REVIEW_LENGTH = 2000;
 
-    private final Map<String, List<Review>> productReviewsStore;
-    private final OrderService orderService;
-    private final ProductService productService;
+    private final ReviewRepository reviewRepository;
+    private final ProductLookupPort productLookupPort;
+    private final PurchaseHistoryQuery purchaseHistoryQuery;
+    private final IdGenerator idGenerator;
+    private final Clock clock;
 
     /**
-     * Constructs a ReviewService with new concurrent storage and injected domain services.
+     * Constructs a {@code ReviewService} with all required segregated ports and clock.
      *
-     * @param orderService   service managing user order history for verified purchase checks
-     * @param productService service managing catalog products and aggregate rating updates
+     * @param reviewRepository     persistence port for review value objects
+     * @param productLookupPort    narrow lookup port verifying product existence
+     * @param purchaseHistoryQuery narrow read-only query checking verified customer purchases
+     * @param idGenerator          identifier generator for review IDs
+     * @param clock                clock for deterministic review timestamps
      */
+    public ReviewService(ReviewRepository reviewRepository,
+                         ProductLookupPort productLookupPort,
+                         PurchaseHistoryQuery purchaseHistoryQuery,
+                         IdGenerator idGenerator,
+                         Clock clock) {
+        this.reviewRepository = Objects.requireNonNull(reviewRepository, "reviewRepository cannot be null");
+        this.productLookupPort = Objects.requireNonNull(productLookupPort, "productLookupPort cannot be null");
+        this.purchaseHistoryQuery = Objects.requireNonNull(purchaseHistoryQuery, "purchaseHistoryQuery cannot be null");
+        this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator cannot be null");
+        this.clock = Objects.requireNonNull(clock, "clock cannot be null");
+    }
+
+    /**
+     * Deprecated convenience constructor for legacy callers until Phase 5 migration.
+     *
+     * @param orderService   legacy order facade
+     * @param productService legacy product facade
+     * @deprecated Use {@link #ReviewService(ReviewRepository, ProductLookupPort, PurchaseHistoryQuery, IdGenerator, Clock)}.
+     */
+    @Deprecated
+    @SuppressWarnings("deprecation")
     public ReviewService(OrderService orderService, ProductService productService) {
         this(new ConcurrentHashMap<>(), orderService, productService);
     }
 
     /**
-     * Parameterized constructor enabling full dependency injection for testing.
+     * Deprecated bridge constructor accepting raw map storage for legacy callers until Phase 5.
      *
-     * @param productReviewsStore in-memory store mapping product IDs to lists of customer reviews
-     * @param orderService        order service for purchase history validation
-     * @param productService      product service for product lookup and rating synchronization
+     * @param productReviewsStore in-memory map keyed by product ID
+     * @param orderService        legacy order facade
+     * @param productService      legacy product facade
+     * @deprecated Use {@link #ReviewService(ReviewRepository, ProductLookupPort, PurchaseHistoryQuery, IdGenerator, Clock)}.
      */
+    @Deprecated
+    @SuppressWarnings("deprecation")
     public ReviewService(Map<String, List<Review>> productReviewsStore,
                          OrderService orderService,
                          ProductService productService) {
-        this.productReviewsStore = Objects.requireNonNull(productReviewsStore, "productReviewsStore cannot be null");
-        this.orderService = Objects.requireNonNull(orderService, "orderService cannot be null");
-        this.productService = Objects.requireNonNull(productService, "productService cannot be null");
+        this(
+                new MapBackedReviewRepository(Objects.requireNonNull(productReviewsStore, "productReviewsStore cannot be null")),
+                Objects.requireNonNull(productService, "productService cannot be null")::getProductById,
+                new LegacyPurchaseHistoryAdapter(Objects.requireNonNull(orderService, "orderService cannot be null")),
+                prefix -> prefix + "-" + UUID.randomUUID(),
+                Clock.systemDefaultZone()
+        );
     }
 
-    /**
-     * Submits a new product review and rating after validating that the user is a verified purchaser.
-     *
-     * <p>Contract:
-     * <ul>
-     *   <li>REQUIRES: rating between 1 and 5, comment non-blank and &lt;= {@value #MAX_REVIEW_LENGTH} characters,
-     *       userId has purchased product in a paid/delivered order.</li>
-     *   <li>MODIFIES: productReviewsStore, product</li>
-     *   <li>EFFECTS: Creates Review, appends to store, updates product rating statistics;
-     *                throws {@link UnauthorizedActionException} if user did not purchase the product.</li>
-     * </ul>
-     *
-     * @param userId     unique identifier of the reviewing user
-     * @param authorName display name of the reviewer
-     * @param productId  unique identifier of the product being reviewed
-     * @param rating     integer star rating from 1 to 5 inclusive
-     * @param comment    written feedback text (non-blank, up to {@value #MAX_REVIEW_LENGTH} characters)
-     * @throws InvalidInputException       if any argument violates input validation or comment length
-     * @throws UnauthorizedActionException if the user has not purchased the product in a qualified order
-     */
+    @Override
     public void addReview(String userId, String authorName, String productId, int rating, String comment) {
-        if (userId == null || userId.isBlank()) {
-            throw new InvalidInputException("User ID cannot be null or blank");
-        }
-        if (authorName == null || authorName.isBlank()) {
-            throw new InvalidInputException("Author name cannot be null or blank");
-        }
-        if (productId == null || productId.isBlank()) {
-            throw new InvalidInputException("Product ID cannot be null or blank");
-        }
+        String targetUserId = requireNonBlank(userId, "User ID");
+        String targetAuthor = requireNonBlank(authorName, "Author name");
+        String targetProductId = requireNonBlank(productId, "Product ID");
         if (rating < 1 || rating > 5) {
             throw new InvalidInputException("Rating must be between 1 and 5 inclusive, got: " + rating);
         }
@@ -96,72 +102,73 @@ public class ReviewService {
             throw new InvalidInputException("Review text must contain 1 to " + MAX_REVIEW_LENGTH + " characters");
         }
 
-        String targetUserId = userId.trim();
-        String targetProductId = productId.trim();
+        Product product = productLookupPort.getProductById(targetProductId);
 
-        // 1. Verify the product exists in the catalog
-        Product product = productService.getProductById(targetProductId);
-
-        // 2. Verify that the user has purchased this product in a qualified completed order
-        boolean hasPurchased = hasUserPurchasedProduct(targetUserId, targetProductId);
-        if (!hasPurchased) {
+        if (!purchaseHistoryQuery.hasPurchasedProduct(targetUserId, targetProductId)) {
             throw new UnauthorizedActionException(
                     "User '" + targetUserId + "' cannot review product '" + targetProductId
                             + "' because they have not purchased it in a completed or paid order"
             );
         }
 
-        // 3. Create the immutable Review value object
-        String reviewId = "rev-" + UUID.randomUUID().toString();
         Review review = new Review(
-                reviewId,
+                idGenerator.nextId("rev"),
                 targetUserId,
-                authorName.trim(),
+                targetAuthor,
                 targetProductId,
                 rating,
                 comment.trim(),
-                LocalDateTime.now()
+                LocalDateTime.now(clock)
         );
 
-        // 4. Save review to thread-safe list in store
-        productReviewsStore.computeIfAbsent(targetProductId, k -> new CopyOnWriteArrayList<>())
-                .add(review);
-
-        // 5. Update running rating metrics on the product entity
+        reviewRepository.addReview(review);
         product.updateRatingStats(rating);
     }
 
-    /**
-     * Retrieves all recorded customer reviews for a given product.
-     *
-     * @param productId unique identifier of the product
-     * @return unmodifiable list of customer reviews for the product
-     * @throws InvalidInputException if {@code productId} is null or blank
-     */
+    @Override
     public List<Review> getProductReviews(String productId) {
-        if (productId == null || productId.isBlank()) {
-            throw new InvalidInputException("Product ID cannot be null or blank");
-        }
-        List<Review> reviews = productReviewsStore.get(productId.trim());
-        if (reviews == null || reviews.isEmpty()) {
-            return List.of();
-        }
-        return List.copyOf(reviews);
+        String targetProductId = requireNonBlank(productId, "Product ID");
+        return reviewRepository.findByProductId(targetProductId);
     }
 
-    // =========================================================================
-    // Private Helper Methods
-    // =========================================================================
-
-    private boolean hasUserPurchasedProduct(String userId, String productId) {
-        List<Order> userOrders = orderService.getOrderHistory(userId);
-        return userOrders.stream()
-                .filter(this::isPaidOrCompletedOrder)
-                .flatMap(order -> order.getItems().stream())
-                .anyMatch(item -> item.productId().equals(productId));
+    private static String requireNonBlank(String value, String fieldLabel) {
+        if (value == null || value.isBlank()) {
+            throw new InvalidInputException(fieldLabel + " cannot be null or blank");
+        }
+        return value.trim();
     }
 
-    private boolean isPaidOrCompletedOrder(Order order) {
+    // Legacy transition adapters removed in Phase 5 along with deprecated constructors
+    private record MapBackedReviewRepository(Map<String, List<Review>> store) implements ReviewRepository {
+        @Override
+        public void addReview(Review review) {
+            store.computeIfAbsent(review.productId(), k -> new CopyOnWriteArrayList<>()).add(review);
+        }
+
+        @Override
+        public List<Review> findByProductId(String productId) {
+            List<Review> list = store.get(productId.trim());
+            return (list == null || list.isEmpty()) ? List.of() : List.copyOf(list);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private record LegacyPurchaseHistoryAdapter(OrderService orderService) implements PurchaseHistoryQuery {
+        @Override
+        public List<Order> getOrderHistory(String userId) {
+            return orderService.getOrderHistory(userId);
+        }
+
+        @Override
+        public boolean hasPurchasedProduct(String userId, String productId) {
+            return orderService.getOrderHistory(userId).stream()
+                    .filter(ReviewService::isPaidOrCompletedOrder)
+                    .flatMap(order -> order.getItems().stream())
+                    .anyMatch(item -> item.productId().equals(productId));
+        }
+    }
+
+    private static boolean isPaidOrCompletedOrder(Order order) {
         OrderStatus status = order.getStatus();
         return status == OrderStatus.PAID
                 || status == OrderStatus.PROCESSING

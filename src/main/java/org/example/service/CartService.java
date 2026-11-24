@@ -3,6 +3,7 @@ package org.example.service;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.example.exception.InsufficientStockException;
 import org.example.exception.InvalidInputException;
@@ -10,55 +11,65 @@ import org.example.model.entity.Cart;
 import org.example.model.entity.Product;
 import org.example.model.vo.CartItem;
 import org.example.model.vo.Quantity;
+import org.example.service.api.CartCheckoutPort;
+import org.example.service.api.CartUseCase;
+import org.example.service.api.ProductAvailabilityPort;
+import org.example.service.port.CartRepository;
 
 /**
- * Application service coordinating customer shopping carts with the product catalog and warehouse inventory.
- *
- * <p>Specification compliance:
- * <ul>
- *   <li>Conforms strictly to Section 5.4 and Figure 2 of domain-model-specification.</li>
- *   <li>Validates available warehouse stock before admitting items into carts.</li>
- *   <li>Supports selective removal of checked-out items upon successful checkout orchestration.</li>
- * </ul>
+ * Application service coordinating customer shopping carts against persistence and
+ * narrow product-availability ports (SRP, ISP, DIP).
  */
-public class CartService {
+public class CartService implements CartUseCase, CartCheckoutPort {
 
-    private final Map<String, Cart> cartStore;
-    private final ProductService productService;
+    private final CartRepository cartRepository;
+    private final ProductAvailabilityPort productAvailabilityPort;
 
     /**
-     * Constructs a CartService with new concurrent storage and injected product service.
+     * Constructs a {@code CartService} backed by segregated repository and availability ports.
      *
-     * @param productService product service for inventory and price validation
+     * @param cartRepository          outbound repository port for {@link Cart} aggregates
+     * @param productAvailabilityPort narrow product-availability port validating stock and visibility
      */
+    public CartService(CartRepository cartRepository, ProductAvailabilityPort productAvailabilityPort) {
+        this.cartRepository = Objects.requireNonNull(cartRepository, "cartRepository cannot be null");
+        this.productAvailabilityPort = Objects.requireNonNull(
+                productAvailabilityPort, "productAvailabilityPort cannot be null"
+        );
+    }
+
+    /**
+     * Deprecated convenience constructor using an internal map for legacy callers until Phase 5.
+     *
+     * @param productService legacy product facade
+     * @deprecated Use {@link #CartService(CartRepository, ProductAvailabilityPort)} instead.
+     */
+    @Deprecated
+    @SuppressWarnings("deprecation")
     public CartService(ProductService productService) {
         this(new ConcurrentHashMap<>(), productService);
     }
 
     /**
-     * Parameterized constructor enabling dependency injection for testing.
+     * Deprecated bridge constructor accepting raw map storage for legacy callers until Phase 5.
      *
-     * @param cartStore      in-memory store mapping user IDs to their Cart aggregates
-     * @param productService product catalog service
+     * @param cartStore      in-memory map keyed by user ID
+     * @param productService legacy product facade
+     * @deprecated Use {@link #CartService(CartRepository, ProductAvailabilityPort)} instead.
      */
+    @Deprecated
+    @SuppressWarnings("deprecation")
     public CartService(Map<String, Cart> cartStore, ProductService productService) {
-        this.cartStore = Objects.requireNonNull(cartStore, "cartStore cannot be null");
-        this.productService = Objects.requireNonNull(productService, "productService cannot be null");
+        this(
+                new MapBackedCartRepository(Objects.requireNonNull(cartStore, "cartStore cannot be null")),
+                Objects.requireNonNull(productService, "productService cannot be null")::requireAvailableProduct
+        );
     }
 
-    /**
-     * Retrieves the active shopping cart for the specified user, creating a new empty cart if none exists.
-     *
-     * @param userId unique identifier of the customer
-     * @return the user's mutable {@link Cart} aggregate
-     * @throws InvalidInputException if {@code userId} is null or blank
-     */
+    @Override
     public Cart getCart(String userId) {
-        if (userId == null || userId.isBlank()) {
-            throw new InvalidInputException("User ID cannot be null or blank");
-        }
-        String normalizedUserId = userId.trim();
-        Cart cart = cartStore.computeIfAbsent(normalizedUserId, uid -> new Cart(uid, uid));
+        String normalizedUserId = requireNonBlank(userId, "User ID");
+        Cart cart = cartRepository.getOrCreate(normalizedUserId);
         if (!normalizedUserId.equals(cart.getUserId())) {
             throw new IllegalStateException("Cart ownership invariant violated: expected owner "
                     + normalizedUserId + " but found " + cart.getUserId());
@@ -66,126 +77,100 @@ public class CartService {
         return cart;
     }
 
-    /**
-     * Adds a quantity of a product to the user's cart after validating stock availability.
-     *
-     * <p>Contract:
-     * <ul>
-     *   <li>REQUIRES: userId != null, productId exists and active, quantity != null and positive</li>
-     *   <li>MODIFIES: cartStore</li>
-     *   <li>EFFECTS: Validates stock, adds to Cart; throws {@link InsufficientStockException} if unavailable.</li>
-     * </ul>
-     *
-     * @param userId    unique identifier of the customer
-     * @param productId unique identifier of the product to add
-     * @param quantity  number of units to add
-     * @throws InvalidInputException       if any argument violates basic input validation
-     * @throws InsufficientStockException  if the warehouse stock cannot fulfill the cumulative requested quantity
-     */
+    @Override
     public void addItem(String userId, String productId, Quantity quantity) {
-        if (userId == null || userId.isBlank()) {
-            throw new InvalidInputException("User ID cannot be null or blank");
-        }
-        if (productId == null || productId.isBlank()) {
-            throw new InvalidInputException("Product ID cannot be null or blank");
-        }
+        String targetUserId = requireNonBlank(userId, "User ID");
+        String targetProductId = requireNonBlank(productId, "Product ID");
         if (quantity == null || quantity.value() <= 0) {
             throw new InvalidInputException("Quantity must be non-null and positive");
         }
-
-        String targetUserId = userId.trim();
-        String targetProductId = productId.trim();
 
         Cart cart = getCart(targetUserId);
         int currentQty = cart.quantityOf(targetProductId);
         int totalRequested = currentQty + quantity.value();
 
-        Product product = productService.requireAvailableProduct(targetProductId, new Quantity(totalRequested));
+        Product product = productAvailabilityPort.requireAvailableProduct(
+                targetProductId, new Quantity(totalRequested)
+        );
         cart.addProduct(product, quantity);
+        cartRepository.save(cart);
     }
 
-    /**
-     * Updates the quantity of a specific product line item in the user's cart.
-     * If the new quantity is zero or less, the item is removed from the cart.
-     *
-     * @param userId      unique identifier of the customer
-     * @param productId   unique identifier of the product
-     * @param newQuantity the updated quantity desired
-     * @throws InvalidInputException      if inputs are null or blank, or product not present in cart
-     * @throws InsufficientStockException if the requested new quantity exceeds available warehouse stock
-     */
+    @Override
     public void updateItemQuantity(String userId, String productId, Quantity newQuantity) {
-        if (userId == null || userId.isBlank()) {
-            throw new InvalidInputException("User ID cannot be null or blank");
-        }
-        if (productId == null || productId.isBlank()) {
-            throw new InvalidInputException("Product ID cannot be null or blank");
-        }
+        String targetUserId = requireNonBlank(userId, "User ID");
+        String targetProductId = requireNonBlank(productId, "Product ID");
         if (newQuantity == null) {
             throw new InvalidInputException("Quantity cannot be null");
         }
 
-        String targetUserId = userId.trim();
-        String targetProductId = productId.trim();
         Cart cart = getCart(targetUserId);
-
         if (cart.quantityOf(targetProductId) == 0) {
             throw new InvalidInputException("Product is not present in this cart");
         }
 
         if (newQuantity.value() <= 0) {
             cart.removeProduct(targetProductId);
+            cartRepository.save(cart);
             return;
         }
 
-        productService.requireAvailableProduct(targetProductId, newQuantity);
+        productAvailabilityPort.requireAvailableProduct(targetProductId, newQuantity);
         cart.updateQuantity(targetProductId, newQuantity);
+        cartRepository.save(cart);
     }
 
-    /**
-     * Removes a product line item entirely from the user's cart.
-     *
-     * @param userId    unique identifier of the customer
-     * @param productId unique identifier of the product to remove
-     * @throws InvalidInputException if inputs are null or blank
-     */
+    @Override
     public void removeItem(String userId, String productId) {
-        if (userId == null || userId.isBlank()) {
-            throw new InvalidInputException("User ID cannot be null or blank");
-        }
-        if (productId == null || productId.isBlank()) {
-            throw new InvalidInputException("Product ID cannot be null or blank");
-        }
-        Cart cart = getCart(userId.trim());
-        if (cart.quantityOf(productId.trim()) == 0) {
+        String targetUserId = requireNonBlank(userId, "User ID");
+        String targetProductId = requireNonBlank(productId, "Product ID");
+
+        Cart cart = getCart(targetUserId);
+        if (cart.quantityOf(targetProductId) == 0) {
             throw new InvalidInputException("Product is not present in this cart");
         }
-        cart.removeProduct(productId.trim());
+        cart.removeProduct(targetProductId);
+        cartRepository.save(cart);
     }
 
-    /**
-     * Clears all items from the user's cart.
-     *
-     * @param userId unique identifier of the customer
-     * @throws InvalidInputException if userId is null or blank
-     */
+    @Override
     public void clearCart(String userId) {
-        if (userId == null || userId.isBlank()) {
-            throw new InvalidInputException("User ID cannot be null or blank");
-        }
-        Cart cart = getCart(userId.trim());
+        String targetUserId = requireNonBlank(userId, "User ID");
+        Cart cart = getCart(targetUserId);
         cart.clear();
+        cartRepository.save(cart);
     }
 
-    /**
-     * Selectively removes checked-out snapshot items from the user's cart.
-     *
-     * @param userId   unique identifier of the customer
-     * @param snapshot the list of checked-out cart items to remove
-     * @throws InvalidInputException if userId is null or blank
-     * @throws NullPointerException  if snapshot is null
-     */
+    @Override
     public void removeCheckedOutItems(String userId, List<CartItem> snapshot) {
-        getCart(userId).removeCheckedOutItems(snapshot);
+        Cart cart = getCart(userId);
+        cart.removeCheckedOutItems(snapshot);
+        cartRepository.save(cart);
+    }
+
+    private static String requireNonBlank(String value, String fieldLabel) {
+        if (value == null || value.isBlank()) {
+            throw new InvalidInputException(fieldLabel + " cannot be null or blank");
+        }
+        return value.trim();
+    }
+
+    // Legacy transition adapter removed in Phase 5 along with deprecated constructors
+    private record MapBackedCartRepository(Map<String, Cart> store) implements CartRepository {
+        @Override
+        public Optional<Cart> findByUserId(String userId) {
+            return Optional.ofNullable(store.get(userId.trim()));
+        }
+
+        @Override
+        public Cart getOrCreate(String userId) {
+            String uid = userId.trim();
+            return store.computeIfAbsent(uid, id -> new Cart(id, id));
+        }
+
+        @Override
+        public void save(Cart cart) {
+            store.put(cart.getUserId(), cart);
+        }
     }
 }
