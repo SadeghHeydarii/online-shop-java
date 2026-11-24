@@ -4,7 +4,7 @@ package org.example.exception;
  * Thrown to indicate an authentication failure, such as invalid credentials,
  * expired session tokens, or inactive account access attempts.
  */
-public class AuthenticationException extends RuntimeException {
+public class AuthenticationException extends ShopException {
 
     /**
      * Constructs a new authentication exception with the specified detail message.

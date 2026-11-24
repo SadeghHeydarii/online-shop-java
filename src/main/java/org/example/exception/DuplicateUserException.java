@@ -4,7 +4,7 @@ package org.example.exception;
  * Thrown when attempting to register a user with an email address or identity
  * that already exists in the system.
  */
-public class DuplicateUserException extends IllegalArgumentException {
+public class DuplicateUserException extends ShopException {
 
     /**
      * Constructs a new duplicate user exception with the specified detail message.

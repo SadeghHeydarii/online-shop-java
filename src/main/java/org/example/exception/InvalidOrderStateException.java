@@ -3,7 +3,7 @@ package org.example.exception;
 /**
  * Domain exception thrown when an operation violates order lifecycle state transitions.
  */
-public class InvalidOrderStateException extends RuntimeException {
+public class InvalidOrderStateException extends ShopException {
 
     /**
      * Constructs a new InvalidOrderStateException with the specified detail message.
