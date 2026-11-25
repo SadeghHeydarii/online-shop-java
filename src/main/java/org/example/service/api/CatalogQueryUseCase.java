@@ -58,4 +58,11 @@ public interface CatalogQueryUseCase {
      * @return unmodifiable list of matching active products
      */
     List<Product> getProductsByCategory(String categoryId);
+
+    /**
+     * Returns the registered non-default sort keys available to catalog consumers.
+     *
+     * @return unmodifiable list of sort option keys
+     */
+    List<String> getAvailableSortOptions();
 }
