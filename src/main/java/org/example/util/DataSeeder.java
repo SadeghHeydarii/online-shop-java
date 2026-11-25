@@ -25,7 +25,11 @@ import org.example.service.ProductService;
  *   <li>Catalog categories and at least five diverse products with valid prices and stock.</li>
  *   <li>Active promotional discount coupons (e.g., {@code WELCOME20} and {@code AUT_SPECIAL}).</li>
  * </ul>
+ *
+ * @deprecated Replaced by {@code org.example.infrastructure.seed.ApplicationDataSeeder};
+ *             retained temporarily for {@code Main} until Phase 5 Composition Root wiring.
  */
+@Deprecated
 public final class DataSeeder {
 
     private DataSeeder() {
