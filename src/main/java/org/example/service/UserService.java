@@ -1,25 +1,25 @@
 package org.example.service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import org.example.exception.DuplicateUserException;
-import org.example.exception.InvalidInputException;
-import org.example.exception.UserNotFoundException;
 import org.example.model.entity.User;
 import org.example.model.vo.Address;
-import org.example.model.vo.ContactInfo;
+import org.example.service.port.UserRepository;
 
 /**
- * Service managing customer profile information and delivery address books.
+ * Deprecated transitional facade delegating profile and address-book operations to
+ * {@link UserProfileService}.
  *
- * <p>Coordinates use cases DS 04 (Profile and Address Management), US 05 (View/Edit Profile),
- * US 06 (Add/Remove Addresses), and US 07 (Set Default Address). Enforces mobile phone uniqueness
- * and address ownership.
+ * @deprecated Scheduled for removal once {@code CustomerMenu} and {@code Main} migrate to
+ *             {@code UserProfileUseCase} and {@code AddressBookUseCase} in Phase 5.
  */
+@Deprecated
 public class UserService {
 
-    private final Map<String, User> userStore;
+    private final UserProfileService profileService;
 
     /**
      * Constructs a {@code UserService} with a dedicated concurrent in-memory user map.
@@ -29,170 +29,93 @@ public class UserService {
     }
 
     /**
-     * Constructs a {@code UserService} backed by the provided shared user storage map.
+     * Constructs a {@code UserService} bridging a raw user storage map to {@link UserProfileService}.
      *
      * @param userStore the backing map for user entities
      */
     public UserService(Map<String, User> userStore) {
-        this.userStore = Objects.requireNonNull(userStore, "userStore cannot be null");
+        Objects.requireNonNull(userStore, "userStore cannot be null");
+        this.profileService = new UserProfileService(new MapBackedUserRepository(userStore));
     }
 
-    /**
-     * Retrieves the profile of a registered user.
-     *
-     * <p><b>Contract:</b>
-     * <ul>
-     *   <li><b>REQUIRES:</b> {@code userId != null}</li>
-     *   <li><b>MODIFIES:</b> nothing</li>
-     *   <li><b>EFFECTS:</b> Returns {@link User} instance; throws {@link UserNotFoundException}
-     *       if the user does not exist.</li>
-     * </ul>
-     *
-     * @param userId the unique identifier of the user
-     * @return the requested {@link User} entity
-     * @throws InvalidInputException if userId is null or blank
-     * @throws UserNotFoundException if no user with the given ID exists
-     */
     public User getProfile(String userId) {
-        if (userId == null || userId.isBlank()) {
-            throw new InvalidInputException("User ID cannot be null or blank");
-        }
-        User user = userStore.get(userId.trim());
-        if (user == null) {
-            throw new UserNotFoundException("User not found with ID: " + userId);
-        }
-        return user;
+        return profileService.getProfile(userId);
     }
 
-    /**
-     * Updates personal details (full name and phone number) in the user's profile,
-     * ensuring mobile number uniqueness across the system.
-     *
-     * <p><b>Contract:</b>
-     * <ul>
-     *   <li><b>REQUIRES:</b> user exists, {@code fullName} non-blank, {@code phone} valid format and unique across accounts</li>
-     *   <li><b>MODIFIES:</b> {@code userStore}</li>
-     *   <li><b>EFFECTS:</b> Validates uniqueness, updates profile name and phone; throws {@link DuplicateUserException}
-     *       if phone is already assigned to another account.</li>
-     * </ul>
-     *
-     * @param userId   the unique identifier of the user
-     * @param fullName the new full name
-     * @param phone    the new telephone contact number
-     * @throws InvalidInputException  if any argument is invalid
-     * @throws DuplicateUserException if the mobile number is already in use by another account
-     * @throws UserNotFoundException  if user does not exist
-     */
     public void updateProfile(String userId, String fullName, String phone) {
-        if (fullName == null || fullName.isBlank()) {
-            throw new InvalidInputException("Full name cannot be blank");
-        }
-        synchronized (userStore) {
-            User user = getProfile(userId);
-            ContactInfo contact;
-            try {
-                contact = new ContactInfo(user.getEmail(), phone);
-            } catch (IllegalArgumentException e) {
-                throw new InvalidInputException(e.getMessage());
-            }
-            boolean duplicate = userStore.values().stream()
-                    .anyMatch(other -> !other.getId().equals(user.getId())
-                            && !contact.phone().isEmpty() && other.getPhone().equals(contact.phone()));
-            if (duplicate) {
-                throw new DuplicateUserException("Mobile number is already registered");
-            }
-            user.updateProfile(fullName.trim(), contact.phone());
-        }
+        profileService.updateProfile(userId, fullName, phone);
     }
 
-    /**
-     * Adds a delivery address to the user's registered addresses.
-     *
-     * <p><b>Contract:</b>
-     * <ul>
-     *   <li><b>REQUIRES:</b> user exists, {@code address != null}</li>
-     *   <li><b>MODIFIES:</b> {@code userStore}</li>
-     *   <li><b>EFFECTS:</b> Calls {@code user.addAddress(address)}.</li>
-     * </ul>
-     *
-     * @param userId  the unique identifier of the user
-     * @param address the delivery address to add
-     * @throws InvalidInputException if address is null
-     * @throws UserNotFoundException if user does not exist
-     */
     public void addAddress(String userId, Address address) {
-        if (address == null) {
-            throw new InvalidInputException("Address cannot be null");
-        }
-        User user = getProfile(userId);
-        user.addAddress(address);
+        profileService.addAddress(userId, address);
     }
 
-    /**
-     * Updates an existing delivery address belonging to the user.
-     *
-     * @param userId  the unique identifier of the user
-     * @param address the modified address (matching an existing addressId)
-     * @throws InvalidInputException if address is null or does not belong to the user
-     * @throws UserNotFoundException if user does not exist
-     */
     public void updateAddress(String userId, Address address) {
-        if (address == null) {
-            throw new InvalidInputException("Address cannot be null");
-        }
-        User user = getProfile(userId);
-        boolean owned = user.getAddresses().stream()
-                .anyMatch(existing -> existing.addressId().equals(address.addressId()));
-        if (!owned) {
-            throw new InvalidInputException("Address does not belong to this user");
-        }
-        user.addAddress(address);
+        profileService.updateAddress(userId, address);
     }
 
-    /**
-     * Removes an address from the user's address book by its identifier.
-     *
-     * <p><b>Contract:</b>
-     * <ul>
-     *   <li><b>REQUIRES:</b> user exists, {@code addressId != null}</li>
-     *   <li><b>MODIFIES:</b> {@code userStore}</li>
-     *   <li><b>EFFECTS:</b> Calls {@code user.removeAddress(addressId)}.</li>
-     * </ul>
-     *
-     * @param userId    the unique identifier of the user
-     * @param addressId the identifier of the address to remove
-     * @throws InvalidInputException if addressId is null or blank
-     * @throws UserNotFoundException if user does not exist
-     */
     public void removeAddress(String userId, String addressId) {
-        if (addressId == null || addressId.isBlank()) {
-            throw new InvalidInputException("Address ID cannot be null or blank");
-        }
-        User user = getProfile(userId);
-        user.removeAddress(addressId);
+        profileService.removeAddress(userId, addressId);
     }
 
-    /**
-     * Designates a specific address as the user's default delivery address.
-     *
-     * <p><b>Contract:</b>
-     * <ul>
-     *   <li><b>REQUIRES:</b> user exists, {@code addressId} exists in user addresses</li>
-     *   <li><b>MODIFIES:</b> {@code userStore}</li>
-     *   <li><b>EFFECTS:</b> Calls {@code user.setDefaultAddress(addressId)}.</li>
-     * </ul>
-     *
-     * @param userId    the unique identifier of the user
-     * @param addressId the identifier of the address to designate as default
-     * @throws InvalidInputException   if addressId is null or blank
-     * @throws UserNotFoundException   if user does not exist
-     * @throws IllegalArgumentException if addressId does not exist in user's addresses
-     */
     public void setDefaultAddress(String userId, String addressId) {
-        if (addressId == null || addressId.isBlank()) {
-            throw new InvalidInputException("Address ID cannot be null or blank");
+        profileService.setDefaultAddress(userId, addressId);
+    }
+
+    // Legacy transition adapter removed in Phase 5 along with UserService
+    private record MapBackedUserRepository(Map<String, User> store) implements UserRepository {
+        @Override
+        public Optional<User> findById(String userId) {
+            return Optional.ofNullable(store.get(userId.trim()));
         }
-        User user = getProfile(userId);
-        user.setDefaultAddress(addressId);
+
+        @Override
+        public Optional<User> findByIdentifier(String identifier) {
+            return store.values().stream()
+                    .filter(user -> user.matchesContact(identifier))
+                    .findFirst();
+        }
+
+        @Override
+        public boolean existsByEmail(String email) {
+            if (email == null || email.isBlank()) {
+                return false;
+            }
+            String norm = email.trim();
+            return store.values().stream()
+                    .anyMatch(u -> !u.getEmail().isEmpty() && u.getEmail().equalsIgnoreCase(norm));
+        }
+
+        @Override
+        public boolean existsByPhone(String phone) {
+            if (phone == null || phone.isBlank()) {
+                return false;
+            }
+            String norm = phone.trim();
+            return store.values().stream()
+                    .anyMatch(u -> !u.getPhone().isEmpty() && u.getPhone().equals(norm));
+        }
+
+        @Override
+        public boolean existsByPhoneExcludingUser(String phone, String excludedUserId) {
+            if (phone == null || phone.isBlank()) {
+                return false;
+            }
+            String norm = phone.trim();
+            return store.values().stream()
+                    .anyMatch(u -> !u.getId().equals(excludedUserId)
+                            && !u.getPhone().isEmpty()
+                            && u.getPhone().equals(norm));
+        }
+
+        @Override
+        public void save(User user) {
+            store.put(user.getId(), user);
+        }
+
+        @Override
+        public List<User> findAll() {
+            return List.copyOf(store.values());
+        }
     }
 }
