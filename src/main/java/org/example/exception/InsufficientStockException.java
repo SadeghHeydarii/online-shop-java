@@ -3,7 +3,7 @@ package org.example.exception;
 /**
  * Domain exception thrown when an operation cannot proceed due to insufficient available inventory.
  */
-public class InsufficientStockException extends RuntimeException {
+public class InsufficientStockException extends ShopException {
 
     /**
      * Constructs a new InsufficientStockException with the specified detail message.

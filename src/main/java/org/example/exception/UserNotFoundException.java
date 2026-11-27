@@ -3,7 +3,7 @@ package org.example.exception;
 /**
  * Thrown when a requested user entity cannot be found by their identifier.
  */
-public class UserNotFoundException extends RuntimeException {
+public class UserNotFoundException extends ShopException {
 
     /**
      * Constructs a new user not found exception with the specified detail message.

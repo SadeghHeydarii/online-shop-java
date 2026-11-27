@@ -3,7 +3,7 @@ package org.example.exception;
 /**
  * Domain exception thrown when a requested order cannot be found.
  */
-public class OrderNotFoundException extends RuntimeException {
+public class OrderNotFoundException extends ShopException {
 
     /**
      * Constructs a new OrderNotFoundException with the specified detail message.

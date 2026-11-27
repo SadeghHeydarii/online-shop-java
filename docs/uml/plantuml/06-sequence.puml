@@ -1,0 +1,71 @@
+@startuml
+hide footbox
+skinparam shadowing false
+
+participant "customerMenu : CustomerMenu" as customerMenu
+participant "cartService : CartService" as cartService
+participant "userService : UserService" as userService
+participant "orderService : OrderService" as orderService
+participant "productService : ProductService" as productService
+
+activate customerMenu
+customerMenu -> customerMenu : handleCheckout(user)
+customerMenu -> cartService : getCart(user.getId())
+cartService --> customerMenu : cart
+customerMenu -> customerMenu : getLatestProfile(user.getId())
+customerMenu -> userService : getProfile(userId)
+userService --> customerMenu : current
+note over customerMenu
+  Nonempty cart, default address (addressId = null),
+  couponCode = "WELCOME20".
+end note
+
+customerMenu -> orderService : checkout(user.getId(), addressId, couponCode)
+activate orderService
+orderService -> cartService : getCart(targetUserId)
+cartService --> orderService : cart
+orderService -> userService : getProfile(targetUserId)
+userService --> orderService : user
+note over orderService : Resolve the default deliveryAddress.
+loop Each CartItem
+  orderService -> productService : requireAvailableProduct(\ncartItem.productId(), cartItem.quantity())
+end
+note over orderService : Build OrderItem snapshots and apply the coupon.
+create participant "order : Order" as order
+orderService -> order : Order(orderId, targetUserId, orderItems,\ndeliveryAddress, subtotal, discount, shippingFee,\npayableAmount, LocalDateTime.now())
+note over orderService
+  checkoutSnapshots.put(order.getOrderId(), List.copyOf(cart.getItems()))
+  orderStore.put(order.getOrderId(), order)
+end note
+orderService --> customerMenu : order
+deactivate orderService
+
+note over customerMenu
+  Customer chooses ONLINE_GATEWAY and confirms
+  a successful simulation.
+end note
+customerMenu -> orderService : processPayment(user.getId(), order.getOrderId(),\nmethod, simulateSuccess)
+activate orderService
+orderService -> orderService : getOrderDetails(userId, orderId)
+orderService -> orderService : processPayment(orderId, method, simulateSuccess)
+orderService -> orderService : getOrderDetails(orderId)
+orderService -> order : getStatus()
+order --> orderService : PENDING
+loop Each OrderItem
+  orderService -> productService : requireAvailableProduct(\nitem.productId(), item.quantity())
+end
+loop Each OrderItem
+  orderService -> productService : adjustStock(item.productId(), -item.quantity().value())
+  orderService -> productService : getProductById(item.productId())
+  productService --> orderService : product
+  note over orderService : Call product.recordSale(item.quantity()).
+end
+note over orderService : Create a SUCCESS PaymentTransaction as tx.
+orderService -> order : recordTransaction(tx)
+orderService -> order : markAsPaid(paymentTime)
+note over orderService : Retrieve and remove the entry from checkoutSnapshots.
+orderService -> cartService : removeCheckedOutItems(order.getUserId(), snapshot)
+orderService --> customerMenu : true
+deactivate orderService
+deactivate customerMenu
+@enduml

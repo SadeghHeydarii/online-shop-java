@@ -1,11 +1,19 @@
 package org.example.service;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.example.exception.InvalidInputException;
 import org.example.exception.ProductNotFoundException;
 import org.example.exception.UnauthorizedActionException;
+import org.example.infrastructure.catalog.DefaultNameSort;
+import org.example.infrastructure.catalog.MapProductSortRegistry;
+import org.example.infrastructure.persistence.InMemoryCategoryRepository;
+import org.example.infrastructure.persistence.InMemoryOrderRepository;
+import org.example.infrastructure.persistence.InMemoryProductRepository;
+import org.example.infrastructure.persistence.InMemoryReviewRepository;
+import org.example.infrastructure.security.UuidIdGenerator;
 import org.example.model.vo.Category;
 import org.example.model.entity.Order;
 import org.example.model.entity.Product;
@@ -15,6 +23,8 @@ import org.example.model.vo.Money;
 import org.example.model.vo.OrderItem;
 import org.example.model.vo.Quantity;
 import org.example.model.vo.Review;
+import org.example.service.api.PurchaseHistoryQuery;
+import org.example.service.port.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -28,8 +38,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("ReviewService Tests")
 class ReviewServiceTest {
 
-    private OrderService orderService;
-    private ProductService productService;
+    private OrderRepository orderRepository;
     private ReviewService reviewService;
     private Product targetProduct;
     private Product otherProduct;
@@ -37,19 +46,53 @@ class ReviewServiceTest {
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderService();
-        productService = new ProductService();
-        reviewService = new ReviewService(orderService, productService);
+        var clock = Clock.systemDefaultZone();
+        var idGenerator = new UuidIdGenerator();
+        orderRepository = new InMemoryOrderRepository();
+        var productRepository = new InMemoryProductRepository();
+        var categoryRepository = new InMemoryCategoryRepository();
+        var catalogQuery = new CatalogQueryService(
+                productRepository,
+                categoryRepository,
+                new MapProductSortRegistry(new DefaultNameSort())
+        );
+        var catalogManagement = new CatalogManagementService(
+                productRepository, categoryRepository, idGenerator, clock
+        );
+        PurchaseHistoryQuery purchaseHistoryQuery = new PurchaseHistoryQuery() {
+            @Override
+            public List<Order> getOrderHistory(String userId) {
+                return orderRepository.findByUserId(userId);
+            }
+
+            @Override
+            public boolean hasPurchasedProduct(String userId, String productId) {
+                return orderRepository.findByUserId(userId).stream()
+                        .filter(o -> o.getStatus() == OrderStatus.PAID
+                                || o.getStatus() == OrderStatus.PROCESSING
+                                || o.getStatus() == OrderStatus.SHIPPED
+                                || o.getStatus() == OrderStatus.DELIVERED)
+                        .flatMap(o -> o.getItems().stream())
+                        .anyMatch(item -> item.productId().equals(productId));
+            }
+        };
+        reviewService = new ReviewService(
+                new InMemoryReviewRepository(),
+                catalogQuery,
+                purchaseHistoryQuery,
+                idGenerator,
+                clock
+        );
 
         Category tech = new Category("CAT-TECH", "Technology", "Tech equipment");
-        productService.registerCategory(tech);
+        catalogManagement.registerCategory(tech);
 
         Money price = new Money(new BigDecimal("100000.00"), "IRR");
-        productService.addProduct("Wireless Headphones", "Noise cancelling", price, 50, "CAT-TECH");
-        productService.addProduct("Smart Watch", "Fitness tracker", price, 30, "CAT-TECH");
+        catalogManagement.addProduct("Wireless Headphones", "Noise cancelling", price, 50, "CAT-TECH");
+        catalogManagement.addProduct("Smart Watch", "Fitness tracker", price, 30, "CAT-TECH");
 
-        targetProduct = productService.searchProducts("Wireless Headphones").getFirst();
-        otherProduct = productService.searchProducts("Smart Watch").getFirst();
+        targetProduct = catalogQuery.searchProducts("Wireless Headphones").getFirst();
+        otherProduct = catalogQuery.searchProducts("Smart Watch").getFirst();
         dummyAddress = new Address("addr-1", "Ali Rezaei", "09121112233",
                 "Tehran", "Tehran", "Azadi Ave", "1122334455", "Home", true);
     }
@@ -90,7 +133,7 @@ class ReviewServiceTest {
             order.cancel();
         }
 
-        orderService.recordOrder(order);
+        orderRepository.save(order);
     }
 
     @Nested

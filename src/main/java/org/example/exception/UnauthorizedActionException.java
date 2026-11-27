@@ -4,7 +4,7 @@ package org.example.exception;
  * Domain exception thrown when a user attempts an unauthorized operation,
  * such as submitting a review for a product they have not purchased in a paid order.
  */
-public class UnauthorizedActionException extends RuntimeException {
+public class UnauthorizedActionException extends ShopException {
 
     /**
      * Constructs a new UnauthorizedActionException with the specified detail message.
