@@ -349,7 +349,7 @@ public class Order {
     /**
      * Records payment failure for this order, transitioning status to {@link OrderStatus#PAYMENT_FAILED}.
      *
-     * @throws IllegalStateException if the order is not in PENDING status
+     * @throws IllegalStateException if the order is not in PENDING or PAYMENT_FAILED status
      */
     public void markAsPaymentFailed() {
         if (status != OrderStatus.PENDING && status != OrderStatus.PAYMENT_FAILED) {

@@ -4,7 +4,7 @@ package org.example.exception;
  * Domain exception thrown when an applied discount coupon is invalid, expired,
  * or does not meet minimum order requirements.
  */
-public class InvalidCouponException extends RuntimeException {
+public class InvalidCouponException extends ShopException {
 
     /**
      * Constructs a new InvalidCouponException with the specified detail message.
