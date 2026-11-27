@@ -1,0 +1,21 @@
+@startuml
+skinparam shadowing false
+
+node "Local workstation" as workstation <<device>> {
+  node "Terminal" as terminal
+  node "Java 21 JVM" as jvm <<executionEnvironment>> {
+    artifact "target/classes" as classes
+  }
+  terminal -- jvm : System.in / System.out
+}
+
+component "Online Shop" as app
+classes ..> app : <<manifest>>
+
+note right of classes
+  org.example.Main is the entry point.
+  Main creates the in-memory stores at startup.
+  Repository and security implementations ship
+  in the same target/classes directory.
+end note
+@enduml

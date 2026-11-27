@@ -1,0 +1,70 @@
+@startuml
+skinparam shadowing false
+
+start
+:GuestMenu.handleLogin() calls\nAuthService.login(identifier, password);
+if (Authenticated as CUSTOMER?) then (yes)
+  :MainMenuController opens\nCustomerMenu.showMenu(user);
+else (no)
+  stop
+endif
+
+:Open Browse Catalog & Add to Cart;
+if (Add a product?) then (yes)
+  :Enter product ID and quantity;
+  :CartService.addItem(userId, productId, quantity);
+  if (Item rejected?) then (yes)
+    :Print add-to-cart error;
+  endif
+endif
+:Return to CustomerMenu and select checkout;
+:CustomerMenu.handleCheckout(user)\nloads the Cart;
+if (Cart is empty?) then (yes)
+  :Warn that the cart is empty\nand return to CustomerMenu;
+  stop
+endif
+
+:Display cart and load current addresses;
+if (Address list empty?) then (yes)
+  if (Add a delivery address now?) then (yes)
+    :promptAddAddress(userId)\nand reload addresses;
+  endif
+  if (Address list still empty?) then (yes)
+    :Print checkout error\nand return to CustomerMenu;
+    stop
+  endif
+endif
+
+:Choose an address (0 for default)\nand enter an optional coupon;
+:OrderService.checkout(userId, addressId, couponCode)\nresolves the address and checks item availability,\nthen builds OrderItem snapshots and validates any coupon;
+if (Checkout succeeds?) then (yes)
+  :Store the cart snapshot in checkoutSnapshots\nand the PENDING Order in orderStore;
+  :Show order summary;
+else (no)
+  :Report the checkout error for an invalid address,\ncoupon, stock level or order state;
+  stop
+endif
+
+if (Pay now?) then (yes)
+  :Choose a PaymentMethod and answer\nthe simulated authorization prompt;
+  :OrderService.processPayment(userId, orderId, method, simulateSuccess)\nchecks ownership and accepts PENDING or PAYMENT_FAILED;
+  if (Simulated authorization succeeds?) then (yes)
+    :Recheck availability of all OrderItem quantities;
+    if (Availability checks pass?) then (yes)
+      :Deduct stock and update soldCount;
+      :Record a SUCCESS PaymentTransaction\nand set the order to PAID;
+      :Remove unchanged purchased CartItem objects;
+      :Print payment success;
+    else (no)
+      :Print payment processing error;
+    endif
+  else (no)
+    :Record a FAILED PaymentTransaction\nand set the order to PAYMENT_FAILED;
+    :Print simulated payment failure;
+  endif
+else (no)
+  :Keep the order PENDING;
+endif
+:Return to CustomerMenu;
+stop
+@enduml
