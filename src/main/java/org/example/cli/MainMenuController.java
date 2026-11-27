@@ -1,73 +1,67 @@
 package org.example.cli;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import org.example.cli.menu.AdminMenu;
-import org.example.cli.menu.CustomerMenu;
-import org.example.cli.menu.GuestMenu;
+import java.util.Optional;
+import org.example.cli.io.OutputWriter;
+import org.example.cli.menu.AuthenticatedMenu;
+import org.example.cli.menu.AuthenticatedSession;
+import org.example.cli.menu.UnauthenticatedMenu;
 import org.example.model.entity.User;
 import org.example.model.enums.UserRole;
-import org.example.service.AuthService;
+import org.example.service.api.AuthUseCase;
 
 /**
- * Central CLI controller coordinating top-level navigation, session routing, and menu transitions.
+ * Central CLI coordinator dispatching unauthenticated and role-based menus polymorphically (SRP, OCP, LSP, DIP).
  *
- * <p>Implements the application control flow defined in Figure 3 and Section 6 of the authoritative
- * domain specification:
- * <ul>
- *   <li>Presents the unauthenticated {@link GuestMenu} when no active user session exists.</li>
- *   <li>Routes authenticated users to {@link CustomerMenu} or {@link AdminMenu} according to their {@link UserRole}.</li>
- *   <li>Handles logout transitions gracefully, returning the user to the guest menu until application shutdown.</li>
- * </ul>
+ * <p>Role routing uses a polymorphic {@code Map<UserRole, AuthenticatedMenu>} registry so adding
+ * new authenticated roles does not modify controller branching logic.
  */
 public class MainMenuController {
 
-    private final GuestMenu guestMenu;
-    private final CustomerMenu customerMenu;
-    private final AdminMenu adminMenu;
-    private final AuthService authService;
-    private final ConsoleIO io;
+    private final UnauthenticatedMenu unauthenticatedMenu;
+    private final Map<UserRole, AuthenticatedMenu> roleMenus;
+    private final AuthUseCase authUseCase;
+    private final OutputWriter out;
 
     private User currentUser;
+    private String currentSessionToken;
 
     /**
-     * Constructs a {@code MainMenuController} without an explicit authentication service reference.
+     * Constructs a {@code MainMenuController} with polymorphic role menus and session lifecycle control.
      *
-     * @param guestMenu    menu handling guest actions and authentication
-     * @param customerMenu menu handling customer interactions
-     * @param adminMenu    menu handling administrative and storekeeper interactions
-     * @param io           console I/O handler
+     * @param unauthenticatedMenu entry menu for unauthenticated visitors
+     * @param authenticatedMenus  registered role menus indexed by {@link AuthenticatedMenu#supportedRole()}
+     * @param authUseCase         session validation and logout port
+     * @param out                 narrow console output port
      */
-    public MainMenuController(GuestMenu guestMenu,
-                              CustomerMenu customerMenu,
-                              AdminMenu adminMenu,
-                              ConsoleIO io) {
-        this(guestMenu, customerMenu, adminMenu, null, io);
+    public MainMenuController(UnauthenticatedMenu unauthenticatedMenu,
+                              Collection<? extends AuthenticatedMenu> authenticatedMenus,
+                              AuthUseCase authUseCase,
+                              OutputWriter out) {
+        this.unauthenticatedMenu = Objects.requireNonNull(unauthenticatedMenu, "unauthenticatedMenu cannot be null");
+        this.authUseCase = Objects.requireNonNull(authUseCase, "authUseCase cannot be null");
+        this.out = Objects.requireNonNull(out, "out cannot be null");
+
+        Objects.requireNonNull(authenticatedMenus, "authenticatedMenus cannot be null");
+        Map<UserRole, AuthenticatedMenu> map = new EnumMap<>(UserRole.class);
+        for (AuthenticatedMenu menu : authenticatedMenus) {
+            Objects.requireNonNull(menu, "authenticatedMenus entry cannot be null");
+            UserRole role = Objects.requireNonNull(menu.supportedRole(), "supportedRole cannot be null");
+            if (map.containsKey(role)) {
+                throw new IllegalArgumentException("Duplicate menu registration for role: " + role);
+            }
+            map.put(role, menu);
+        }
+        this.roleMenus = Collections.unmodifiableMap(map);
     }
 
     /**
-     * Constructs a {@code MainMenuController} with all injected menus and services.
-     *
-     * @param guestMenu    menu handling guest actions and authentication
-     * @param customerMenu menu handling customer interactions
-     * @param adminMenu    menu handling administrative and storekeeper interactions
-     * @param authService  authentication service for session state synchronization
-     * @param io           console I/O handler
-     */
-    public MainMenuController(GuestMenu guestMenu,
-                              CustomerMenu customerMenu,
-                              AdminMenu adminMenu,
-                              AuthService authService,
-                              ConsoleIO io) {
-        this.guestMenu = Objects.requireNonNull(guestMenu, "guestMenu cannot be null");
-        this.customerMenu = Objects.requireNonNull(customerMenu, "customerMenu cannot be null");
-        this.adminMenu = Objects.requireNonNull(adminMenu, "adminMenu cannot be null");
-        this.authService = authService;
-        this.io = Objects.requireNonNull(io, "io cannot be null");
-    }
-
-    /**
-     * Starts the main application interaction loop, routing users through menus according to session state.
+     * Runs the top-level menu dispatch loop until exit or EOF.
      */
     public void start() {
         printWelcomeBanner();
@@ -75,36 +69,28 @@ public class MainMenuController {
         while (true) {
             try {
                 if (currentUser == null) {
-                    // Route to Guest Menu (Browsing, Search, Registration, Login, Exit)
-                    currentUser = guestMenu.showMenu();
-                    if (currentUser == null) {
-                        // User chose to exit the application from Guest Menu
+                    Optional<AuthenticatedSession> session = unauthenticatedMenu.showMenu();
+                    if (session.isEmpty()) {
                         break;
                     }
+                    setCurrentSession(session.get());
                 }
 
-                if (authService != null && guestMenu.getSessionToken() != null
-                        && authService.getAuthenticatedUser(guestMenu.getSessionToken()) == null) {
+                if (currentSessionToken != null && authUseCase.getAuthenticatedUser(currentSessionToken) == null) {
                     handleLogout();
                     continue;
                 }
 
-                // Route authenticated user based on role
-                UserRole role = currentUser.getRole();
-                if (role == UserRole.CUSTOMER) {
-                    customerMenu.showMenu(currentUser);
-                } else if (role == UserRole.ADMIN) {
-                    adminMenu.showMenu(currentUser);
+                AuthenticatedMenu roleMenu = roleMenus.get(currentUser.getRole());
+                if (roleMenu != null) {
+                    roleMenu.showMenu(currentUser);
                 } else {
-                    io.printError("This role cannot access the shop menus: " + role);
+                    out.printError("This role cannot access the shop menus: " + currentUser.getRole());
                 }
 
-                // After customer or admin menu returns, the user chose to Log Out (Option 0)
                 handleLogout();
-
             } catch (NoSuchElementException e) {
-                // Input stream closed or terminated (e.g. automated pipe or test execution)
-                io.println();
+                out.println();
                 break;
             }
         }
@@ -113,42 +99,46 @@ public class MainMenuController {
     }
 
     /**
-     * Clears current authenticated user session state and terminates the active session token.
+     * Revokes any active session token in {@link AuthUseCase} and clears controller session state.
      */
     public void handleLogout() {
-        guestMenu.logout();
+        if (currentSessionToken != null) {
+            authUseCase.logout(currentSessionToken);
+            currentSessionToken = null;
+        }
         currentUser = null;
     }
 
-    /**
-     * Returns the currently active authenticated user, or {@code null} if in guest mode.
-     *
-     * @return current active user or {@code null}
-     */
     public User getCurrentUser() {
         return currentUser;
     }
 
-    /**
-     * Explicitly sets the current authenticated user (primarily used for test session setup).
-     *
-     * @param user the authenticated user
-     */
+    public String getCurrentSessionToken() {
+        return currentSessionToken;
+    }
+
+    public void setCurrentSession(AuthenticatedSession session) {
+        Objects.requireNonNull(session, "session cannot be null");
+        this.currentUser = session.user();
+        this.currentSessionToken = session.sessionToken();
+    }
+
     public void setCurrentUser(User user) {
         this.currentUser = user;
+        this.currentSessionToken = null;
     }
 
     private void printWelcomeBanner() {
-        io.println("================================================================================");
-        io.println("                   WELCOME TO AMIRKABIR ONLINE SHOP (AUT)                      ");
-        io.println("               Object-Oriented Software Design Project - Fall 2026              ");
-        io.println("================================================================================");
+        out.println("================================================================================");
+        out.println("                   WELCOME TO AMIRKABIR ONLINE SHOP (AUT)                      ");
+        out.println("               Object-Oriented Software Design Project - Fall 2026              ");
+        out.println("================================================================================");
     }
 
     private void printGoodbyeBanner() {
-        io.println();
-        io.println("================================================================================");
-        io.println("              Thank you for using Amirkabir Online Shop. Goodbye!               ");
-        io.println("================================================================================");
+        out.println();
+        out.println("================================================================================");
+        out.println("              Thank you for using Amirkabir Online Shop. Goodbye!               ");
+        out.println("================================================================================");
     }
 }

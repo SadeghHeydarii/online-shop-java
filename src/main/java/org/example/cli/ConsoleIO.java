@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Scanner;
+import org.example.cli.io.TerminalIO;
 
 /**
  * Robust console input/output utility class for the CLI presentation layer.
@@ -19,7 +20,7 @@ import java.util.Scanner;
  * <p>Supports dependency injection of {@link Scanner} and {@link PrintStream} to allow
  * 100% deterministic, automated unit and integration testing via simulated streams.
  */
-public class ConsoleIO {
+public class ConsoleIO implements TerminalIO {
 
     private final Scanner scanner;
     private final PrintStream out;
