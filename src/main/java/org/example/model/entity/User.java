@@ -164,6 +164,16 @@ public class User {
     }
 
     /**
+     * Returns whether the given email or phone identifier matches this user's registered contact details.
+     *
+     * @param identifier candidate email address or mobile phone number
+     * @return {@code true} if matching; {@code false} if null, blank, or mismatched
+     */
+    public boolean matchesContact(String identifier) {
+        return new ContactInfo(email, phone).matches(identifier);
+    }
+
+    /**
      * Checks whether this user account is active.
      *
      * @return {@code true} if active; {@code false} if deactivated

@@ -167,19 +167,22 @@ The code is organized around domain behavior, use cases, and terminal interactio
 
 | Component | Location | Responsibility |
 | --- | --- | --- |
-| Application entry point | `src/main/java/org/example/Main.java` | Creates shared stores, wires services, seeds data, and starts the menu controller |
-| Domain model | `src/main/java/org/example/model/` | Entities, immutable value objects, enums, and model invariants |
-| Application services | `src/main/java/org/example/service/` | Authentication, profiles, catalog, cart, order, and review operations |
-| Command-line interface | `src/main/java/org/example/cli/` | Input/output handling, role-based navigation, and guest, customer, and administrator menus |
-| Application exceptions | `src/main/java/org/example/exception/` | Errors for invalid input, unavailable products, access checks, and invalid order operations |
-| Utilities | `src/main/java/org/example/util/` | Sample-data initialization and password hashing |
-| Tests | `src/test/java/org/example/` | Unit, service, menu, end-to-end, and regression tests |
-| Documentation | `docs/` | Domain specification, diagrams, and document build files |
-| Build configuration | `pom.xml` | Java version, test dependencies, and Maven plugins |
+| Composition root | `src/main/java/org/example/Main.java` | Instantiates repositories, registries, policies, cohesive services, `ApplicationDataSeeder`, and polymorphic CLI menus |
+| Domain model | `src/main/java/org/example/model/` | Entities, immutable records (value objects), enums, and `checkRep()` invariants (zero outward dependencies) |
+| Service & use-case APIs | `src/main/java/org/example/service/api/` | 17 segregated inbound use-case and narrow inter-service interfaces (ISP) |
+| Outbound ports & strategies | `src/main/java/org/example/service/port/` | 19 repository, security, ID/clock, pricing, sort, and payment-gateway ports (DIP/OCP) |
+| Application services | `src/main/java/org/example/service/` | Cohesive single-responsibility services for auth, recovery, profiles, catalog query/admin, carts, checkout, pricing, payment, fulfillment, and reviews |
+| Infrastructure adapters | `src/main/java/org/example/infrastructure/` | In-memory repositories, payment gateways, coupon/shipping policies, catalog sort strategies, security generators, and `ApplicationDataSeeder` |
+| Command-line interface | `src/main/java/org/example/cli/` | Segregated `InputReader`/`OutputWriter` ports, `ProductTablePrinter`, polymorphic `AuthenticatedMenu`/`UnauthenticatedMenu`, focused customer/admin handlers, and `MainMenuController` |
+| Application exceptions | `src/main/java/org/example/exception/` | `ShopException` domain hierarchy plus `InvalidInputException` (`IllegalArgumentException`) guards |
+| Utilities | `src/main/java/org/example/util/` | Low-level SHA-256 hashing helper (`PasswordUtil`) |
+| Tests | `src/test/java/org/example/` | 567 JUnit 5 tests spanning domain invariants, abstract LSP contract suites, isolated port-mocked service tests, CLI handlers, E2E flows, and regression coverage |
+| Documentation | `docs/` | Domain specification, diagrams, LaTeX build scripts, and [SOLID refactoring & UML handoff summary](docs/solid-refactoring-summary.md) |
+| Build configuration | `pom.xml` | Java 21, JUnit 5.10.2, Surefire (`-ea`), and `exec-maven-plugin` configuration |
 
 The main entities are `User`, `Product`, `Cart`, and `Order`. Java records represent values such as `Money`, `Quantity`, `Address`, `ContactInfo`, cart and order items, categories, coupons, reviews, and payment transactions.
 
-Services receive their dependencies through constructors. `Main` supplies shared in-memory maps, allowing the CLI and tests to use the same service APIs without a database or dependency-injection framework. `CatalogMenu` shares catalog operations between guest and customer menus.
+High-level services depend strictly on `service.api` and `service.port` abstractions plus injectable `Clock`, `IdGenerator`, `PasswordHasher`, and `VerificationCodeGenerator` ports. Open-Closed registries (`MapProductSortRegistry` and `MapPaymentGatewayRegistry`) eliminate switch-based sorting and payment routing, while `Main` wires all adapters cleanly into polymorphic `GuestMenu`, `CustomerMenu`, and `AdminMenu` dashboards.
 
 ## Testing
 
@@ -204,6 +207,7 @@ Maven Surefire enables assertions during tests and writes reports to `target/sur
 The detailed design documents are maintained in Persian:
 
 - [Documentation guide](docs/README.md)
+- [SOLID Refactoring Summary & UML Handoff Guide](docs/solid-refactoring-summary.md)
 - [Domain model specification — Markdown](docs/domain-model/domain-model-specification.md)
 - [Domain model specification — PDF](docs/domain-model/domain-model-specification.pdf)
 - [Domain model specification — LaTeX source](docs/domain-model/domain-model-specification.tex)
@@ -223,10 +227,13 @@ Document build scripts are under `docs/domain-model/build/`. They are separate f
 - Product images are stored and displayed as HTTP/HTTPS URLs. The application does not upload or render image files.
 - `STOREKEEPER` exists in the role enum, but there is no separate storekeeper menu and that role does not receive administrator access.
 
-## Course information
+## Course information & team
 
 - **Course:** Principles of Software Design
 - **University:** Amirkabir University of Technology
 - **Term:** Fall 2026
 - **Instructor:** Dr. Hanieh Fallah
 - **Head teaching assistant:** Amir Mohammad Zaker
+- **Team Members:**
+  - **Mohammad Sadegh Heydari** — Phase 2 SOLID Refactoring, Architecture Verification & Git Workflow
+  - **Mohammad Aali** — Code Review & Phase 2 UML Design Modeling
