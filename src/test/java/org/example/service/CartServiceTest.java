@@ -1,15 +1,24 @@
 package org.example.service;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import org.example.exception.InsufficientStockException;
 import org.example.exception.InvalidInputException;
+import org.example.infrastructure.catalog.DefaultNameSort;
+import org.example.infrastructure.catalog.MapProductSortRegistry;
+import org.example.infrastructure.persistence.InMemoryCartRepository;
+import org.example.infrastructure.persistence.InMemoryCategoryRepository;
+import org.example.infrastructure.persistence.InMemoryProductRepository;
+import org.example.infrastructure.security.UuidIdGenerator;
 import org.example.model.entity.Cart;
 import org.example.model.vo.Category;
 import org.example.model.entity.Product;
 import org.example.model.vo.Money;
 import org.example.model.vo.Quantity;
+import org.example.service.port.CartRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -23,7 +32,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("CartService Tests")
 class CartServiceTest {
 
-    private ProductService productService;
+    private CatalogQueryService catalogQueryService;
+    private CatalogManagementService catalogManagementService;
     private CartService cartService;
     private Product activeProduct;
     private Product lowStockProduct;
@@ -31,21 +41,33 @@ class CartServiceTest {
 
     @BeforeEach
     void setUp() {
-        productService = new ProductService();
-        cartService = new CartService(productService);
+        var productRepository = new InMemoryProductRepository();
+        var categoryRepository = new InMemoryCategoryRepository();
+        catalogQueryService = new CatalogQueryService(
+                productRepository,
+                categoryRepository,
+                new MapProductSortRegistry(new DefaultNameSort())
+        );
+        catalogManagementService = new CatalogManagementService(
+                productRepository,
+                categoryRepository,
+                new UuidIdGenerator(),
+                Clock.systemDefaultZone()
+        );
+        cartService = new CartService(new InMemoryCartRepository(), catalogQueryService);
 
         Category tech = new Category("CAT-TECH", "Technology", "Tech gear");
-        productService.registerCategory(tech);
+        catalogManagementService.registerCategory(tech);
 
         Money price = new Money(new BigDecimal("100000.00"), "IRR");
-        productService.addProduct("Wireless Mouse", "Optical mouse", price, 20, "CAT-TECH");
-        productService.addProduct("Rare Cable", "Limited edition cable", price, 2, "CAT-TECH");
-        productService.addProduct("Old Keyboard", "Legacy model", price, 10, "CAT-TECH");
+        catalogManagementService.addProduct("Wireless Mouse", "Optical mouse", price, 20, "CAT-TECH");
+        catalogManagementService.addProduct("Rare Cable", "Limited edition cable", price, 2, "CAT-TECH");
+        catalogManagementService.addProduct("Old Keyboard", "Legacy model", price, 10, "CAT-TECH");
 
-        activeProduct = productService.searchProducts("Wireless Mouse").getFirst();
-        lowStockProduct = productService.searchProducts("Rare Cable").getFirst();
-        inactiveProduct = productService.searchProducts("Old Keyboard").getFirst();
-        productService.deactivateProduct(inactiveProduct.getId());
+        activeProduct = catalogQueryService.searchProducts("Wireless Mouse").getFirst();
+        lowStockProduct = catalogQueryService.searchProducts("Rare Cable").getFirst();
+        inactiveProduct = catalogQueryService.searchProducts("Old Keyboard").getFirst();
+        catalogManagementService.deactivateProduct(inactiveProduct.getId());
     }
 
     @Nested
@@ -261,7 +283,24 @@ class CartServiceTest {
             Cart corruptedCart = new Cart("cart-123", "user-different");
             tamperedStore.put("user-target", corruptedCart);
 
-            CartService customService = new CartService(tamperedStore, productService);
+            CartRepository tamperedRepo = new CartRepository() {
+                @Override
+                public Optional<Cart> findByUserId(String userId) {
+                    return Optional.ofNullable(tamperedStore.get(userId));
+                }
+
+                @Override
+                public Cart getOrCreate(String userId) {
+                    return tamperedStore.computeIfAbsent(userId, id -> new Cart(id, id));
+                }
+
+                @Override
+                public void save(Cart cart) {
+                    tamperedStore.put(cart.getUserId(), cart);
+                }
+            };
+
+            CartService customService = new CartService(tamperedRepo, catalogQueryService);
 
             IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
                     customService.getCart("user-target")

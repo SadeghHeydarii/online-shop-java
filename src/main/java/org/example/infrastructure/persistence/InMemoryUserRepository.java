@@ -6,7 +6,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.example.model.entity.User;
-import org.example.model.vo.ContactInfo;
 import org.example.service.port.UserRepository;
 
 /**
@@ -42,7 +41,7 @@ public class InMemoryUserRepository implements UserRepository {
     public Optional<User> findByIdentifier(String identifier) {
         String target = RepositoryPreconditions.requireNonBlank(identifier, "identifier");
         return store.values().stream()
-                .filter(user -> new ContactInfo(user.getEmail(), user.getPhone()).matches(target))
+                .filter(user -> user.matchesContact(target))
                 .findFirst();
     }
 
