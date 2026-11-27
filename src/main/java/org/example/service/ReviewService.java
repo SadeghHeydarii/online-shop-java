@@ -3,16 +3,10 @@ package org.example.service;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import org.example.exception.InvalidInputException;
 import org.example.exception.UnauthorizedActionException;
-import org.example.model.entity.Order;
 import org.example.model.entity.Product;
-import org.example.model.enums.OrderStatus;
 import org.example.model.vo.Review;
 import org.example.service.api.ProductLookupPort;
 import org.example.service.api.PurchaseHistoryQuery;
@@ -53,41 +47,6 @@ public class ReviewService implements ReviewUseCase {
         this.purchaseHistoryQuery = Objects.requireNonNull(purchaseHistoryQuery, "purchaseHistoryQuery cannot be null");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator cannot be null");
         this.clock = Objects.requireNonNull(clock, "clock cannot be null");
-    }
-
-    /**
-     * Deprecated convenience constructor for legacy callers until Phase 5 migration.
-     *
-     * @param orderService   legacy order facade
-     * @param productService legacy product facade
-     * @deprecated Use {@link #ReviewService(ReviewRepository, ProductLookupPort, PurchaseHistoryQuery, IdGenerator, Clock)}.
-     */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public ReviewService(OrderService orderService, ProductService productService) {
-        this(new ConcurrentHashMap<>(), orderService, productService);
-    }
-
-    /**
-     * Deprecated bridge constructor accepting raw map storage for legacy callers until Phase 5.
-     *
-     * @param productReviewsStore in-memory map keyed by product ID
-     * @param orderService        legacy order facade
-     * @param productService      legacy product facade
-     * @deprecated Use {@link #ReviewService(ReviewRepository, ProductLookupPort, PurchaseHistoryQuery, IdGenerator, Clock)}.
-     */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public ReviewService(Map<String, List<Review>> productReviewsStore,
-                         OrderService orderService,
-                         ProductService productService) {
-        this(
-                new MapBackedReviewRepository(Objects.requireNonNull(productReviewsStore, "productReviewsStore cannot be null")),
-                Objects.requireNonNull(productService, "productService cannot be null")::getProductById,
-                new LegacyPurchaseHistoryAdapter(Objects.requireNonNull(orderService, "orderService cannot be null")),
-                prefix -> prefix + "-" + UUID.randomUUID(),
-                Clock.systemDefaultZone()
-        );
     }
 
     @Override
@@ -136,43 +95,5 @@ public class ReviewService implements ReviewUseCase {
             throw new InvalidInputException(fieldLabel + " cannot be null or blank");
         }
         return value.trim();
-    }
-
-    // Legacy transition adapters removed in Phase 5 along with deprecated constructors
-    private record MapBackedReviewRepository(Map<String, List<Review>> store) implements ReviewRepository {
-        @Override
-        public void addReview(Review review) {
-            store.computeIfAbsent(review.productId(), k -> new CopyOnWriteArrayList<>()).add(review);
-        }
-
-        @Override
-        public List<Review> findByProductId(String productId) {
-            List<Review> list = store.get(productId.trim());
-            return (list == null || list.isEmpty()) ? List.of() : List.copyOf(list);
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    private record LegacyPurchaseHistoryAdapter(OrderService orderService) implements PurchaseHistoryQuery {
-        @Override
-        public List<Order> getOrderHistory(String userId) {
-            return orderService.getOrderHistory(userId);
-        }
-
-        @Override
-        public boolean hasPurchasedProduct(String userId, String productId) {
-            return orderService.getOrderHistory(userId).stream()
-                    .filter(ReviewService::isPaidOrCompletedOrder)
-                    .flatMap(order -> order.getItems().stream())
-                    .anyMatch(item -> item.productId().equals(productId));
-        }
-    }
-
-    private static boolean isPaidOrCompletedOrder(Order order) {
-        OrderStatus status = order.getStatus();
-        return status == OrderStatus.PAID
-                || status == OrderStatus.PROCESSING
-                || status == OrderStatus.SHIPPED
-                || status == OrderStatus.DELIVERED;
     }
 }

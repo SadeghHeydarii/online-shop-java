@@ -67,4 +67,32 @@ class ApplicationDataSeederTest {
                 couponRepo.findByCode("WELCOME20").orElseThrow().expiryDate());
         assertTrue(couponRepo.findByCode("AUT_SPECIAL").isPresent());
     }
+
+    @Test
+    void constructorRejectsNullDependencies() {
+        Clock fixedClock = Clock.fixed(Instant.parse("2026-11-25T12:00:00Z"), ZoneOffset.UTC);
+        UserRepository userRepo = new InMemoryUserRepository();
+        CredentialRepository credentialRepo = new InMemoryCredentialRepository();
+        CategoryRepository categoryRepo = new InMemoryCategoryRepository();
+        ProductRepository productRepo = new InMemoryProductRepository();
+        CouponRepository couponRepo = new InMemoryCouponRepository();
+        PasswordHasher passwordHasher = new Sha256PasswordHasher();
+        CatalogManagementService catalogAdmin = new CatalogManagementService(
+                productRepo, categoryRepo, prefix -> prefix + "-1", fixedClock);
+
+        assertThrows(NullPointerException.class, () -> new ApplicationDataSeeder(
+                null, credentialRepo, categoryRepo, catalogAdmin, couponRepo, passwordHasher, fixedClock));
+        assertThrows(NullPointerException.class, () -> new ApplicationDataSeeder(
+                userRepo, null, categoryRepo, catalogAdmin, couponRepo, passwordHasher, fixedClock));
+        assertThrows(NullPointerException.class, () -> new ApplicationDataSeeder(
+                userRepo, credentialRepo, null, catalogAdmin, couponRepo, passwordHasher, fixedClock));
+        assertThrows(NullPointerException.class, () -> new ApplicationDataSeeder(
+                userRepo, credentialRepo, categoryRepo, null, couponRepo, passwordHasher, fixedClock));
+        assertThrows(NullPointerException.class, () -> new ApplicationDataSeeder(
+                userRepo, credentialRepo, categoryRepo, catalogAdmin, null, passwordHasher, fixedClock));
+        assertThrows(NullPointerException.class, () -> new ApplicationDataSeeder(
+                userRepo, credentialRepo, categoryRepo, catalogAdmin, couponRepo, null, fixedClock));
+        assertThrows(NullPointerException.class, () -> new ApplicationDataSeeder(
+                userRepo, credentialRepo, categoryRepo, catalogAdmin, couponRepo, passwordHasher, null));
+    }
 }

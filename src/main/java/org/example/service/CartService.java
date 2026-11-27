@@ -1,10 +1,7 @@
 package org.example.service;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import org.example.exception.InsufficientStockException;
 import org.example.exception.InvalidInputException;
 import org.example.model.entity.Cart;
@@ -35,34 +32,6 @@ public class CartService implements CartUseCase, CartCheckoutPort {
         this.cartRepository = Objects.requireNonNull(cartRepository, "cartRepository cannot be null");
         this.productAvailabilityPort = Objects.requireNonNull(
                 productAvailabilityPort, "productAvailabilityPort cannot be null"
-        );
-    }
-
-    /**
-     * Deprecated convenience constructor using an internal map for legacy callers until Phase 5.
-     *
-     * @param productService legacy product facade
-     * @deprecated Use {@link #CartService(CartRepository, ProductAvailabilityPort)} instead.
-     */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public CartService(ProductService productService) {
-        this(new ConcurrentHashMap<>(), productService);
-    }
-
-    /**
-     * Deprecated bridge constructor accepting raw map storage for legacy callers until Phase 5.
-     *
-     * @param cartStore      in-memory map keyed by user ID
-     * @param productService legacy product facade
-     * @deprecated Use {@link #CartService(CartRepository, ProductAvailabilityPort)} instead.
-     */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public CartService(Map<String, Cart> cartStore, ProductService productService) {
-        this(
-                new MapBackedCartRepository(Objects.requireNonNull(cartStore, "cartStore cannot be null")),
-                Objects.requireNonNull(productService, "productService cannot be null")::requireAvailableProduct
         );
     }
 
@@ -153,24 +122,5 @@ public class CartService implements CartUseCase, CartCheckoutPort {
             throw new InvalidInputException(fieldLabel + " cannot be null or blank");
         }
         return value.trim();
-    }
-
-    // Legacy transition adapter removed in Phase 5 along with deprecated constructors
-    private record MapBackedCartRepository(Map<String, Cart> store) implements CartRepository {
-        @Override
-        public Optional<Cart> findByUserId(String userId) {
-            return Optional.ofNullable(store.get(userId.trim()));
-        }
-
-        @Override
-        public Cart getOrCreate(String userId) {
-            String uid = userId.trim();
-            return store.computeIfAbsent(uid, id -> new Cart(id, id));
-        }
-
-        @Override
-        public void save(Cart cart) {
-            store.put(cart.getUserId(), cart);
-        }
     }
 }

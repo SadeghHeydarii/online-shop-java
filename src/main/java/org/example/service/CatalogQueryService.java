@@ -111,6 +111,11 @@ public class CatalogQueryService implements CatalogQueryUseCase, ProductAvailabi
     }
 
     @Override
+    public List<String> getAvailableSortOptions() {
+        return sortRegistry.availableKeys();
+    }
+
+    @Override
     public Product requireAvailableProduct(String productId, Quantity quantity) {
         Product product = getProductById(productId);
         if (!CatalogLookupSupport.isVisible(product, categoryRepository)) {

@@ -107,7 +107,9 @@ class CatalogQueryServiceTest {
                 new MapProductSortRegistry(new DefaultNameSort(), stockDescSort)
         );
 
+        assertEquals(List.of("price_asc", "rating"), queryService.getAvailableSortOptions());
         assertEquals(List.of(book, laptop), extensibleQuery.filterAndSort(null, null, null, "stock_desc"));
+        assertEquals(List.of("stock_desc"), extensibleQuery.getAvailableSortOptions());
         assertThrows(InvalidInputException.class,
                 () -> extensibleQuery.filterAndSort(null, null, null, "nonexistent"));
     }
