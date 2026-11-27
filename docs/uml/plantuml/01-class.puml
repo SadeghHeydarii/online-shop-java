@@ -1,0 +1,529 @@
+@startuml
+hide empty members
+hide circle
+skinparam groupInheritance 2
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam nodesep 24
+skinparam ranksep 34
+
+package "org.example" as entry {
+  class Main {
+    {static} +main(args : String[]) : void
+  }
+}
+
+package "org.example.cli" as cli {
+  class ConsoleIO {
+    -scanner : Scanner
+    -out : PrintStream
+    +readInt(prompt : String, min : int, max : int) : int
+    +readBoolean(prompt : String) : boolean
+    +printError(message : String) : void
+  }
+  class MainMenuController {
+    -currentUser : User
+    +start() : void
+    +handleLogout() : void
+  }
+}
+
+package "org.example.cli.menu" as menus {
+  class GuestMenu {
+    -sessionToken : String
+    -io : ConsoleIO
+    +showMenu() : User
+    +handleLogin() : User
+    +handleRegister() : void
+    +logout() : void
+  }
+  class CustomerMenu {
+    -io : ConsoleIO
+    -userService : UserService
+    -productService : ProductService
+    -reviewService : ReviewService
+    +showMenu(user : User) : void
+    +handleBrowseAndAddToCart(user : User) : void
+    +handleCartManagement(user : User) : void
+    +handleCheckout(user : User) : void
+    +handleOrderHistory(user : User) : void
+  }
+  class AdminMenu {
+    -io : ConsoleIO
+    -productService : ProductService
+    -orderService : OrderService
+    +showMenu(admin : User) : void
+    +handleManageStock() : void
+    +handleProcessOrders() : void
+  }
+  class CatalogMenu {
+    -io : ConsoleIO
+    -productService : ProductService
+    -reviewService : ReviewService
+    +showMenu() : void
+    +handleBrowseProducts() : void
+    +handleSearchProducts() : void
+    +handleViewProductDetails() : void
+  }
+}
+
+package "org.example.service" as services {
+  class AuthService {
+    -userStore : Map<String, User>
+    -credentialsStore : Map<String, String>
+    -activeSessions : Map<String, String>
+    -passwordResets : Map<String, PasswordReset>
+    +register(fullName : String, email : String, phone : String, password : String) : User
+    +login(identifier : String, password : String) : String
+    +getAuthenticatedUser(sessionToken : String) : User
+    +logout(sessionToken : String) : void
+  }
+  class PasswordReset <<record>> {
+    -tokenHash : String
+    -expiresAt : LocalDateTime
+  }
+  class UserService {
+    -userStore : Map<String, User>
+    +getProfile(userId : String) : User
+    +addAddress(userId : String, address : Address) : void
+    +updateAddress(userId : String, address : Address) : void
+  }
+  class ProductService {
+    -productStore : Map<String, Product>
+    -categoryStore : Map<String, Category>
+    +getAllActiveProducts() : List<Product>
+    +getProductById(productId : String) : Product
+    +addProduct(name : String, desc : String, price : Money, stock : int, categoryId : String) : void
+    +requireAvailableProduct(productId : String, quantity : Quantity) : Product
+    +adjustStock(productId : String, delta : int) : void
+  }
+  class CartService {
+    -cartStore : Map<String, Cart>
+    +getCart(userId : String) : Cart
+    +addItem(userId : String, productId : String, quantity : Quantity) : void
+    +removeCheckedOutItems(userId : String, snapshot : List<CartItem>) : void
+  }
+  class OrderService {
+    -orderStore : Map<String, Order>
+    -couponStore : Map<String, Coupon>
+    -checkoutSnapshots : Map<String, List<CartItem>>
+    +checkout(userId : String, addressId : String, couponCode : String) : Order
+    +processPayment(orderId : String, method : PaymentMethod, simulateSuccess : boolean) : boolean
+    +processPayment(userId : String, orderId : String, method : PaymentMethod, simulateSuccess : boolean) : boolean
+    +getOrderDetails(userId : String, orderId : String) : Order
+    +getOrderHistory(userId : String) : List<Order>
+    +updateOrderStatus(orderId : String, newStatus : OrderStatus) : void
+  }
+  class ReviewService {
+    -productReviewsStore : Map<String, List<Review>>
+    +addReview(userId : String, authorName : String, productId : String, rating : int, comment : String) : void
+    +getProductReviews(productId : String) : List<Review>
+  }
+}
+
+package "org.example.model.entity" as entities {
+  class User {
+    -id : String
+    -fullName : String
+    -email : String
+    -phone : String
+    -passwordHash : String
+    -role : UserRole
+    -active : boolean
+    -createdAt : LocalDateTime
+    -addresses : List<Address>
+    +getAddresses() : List<Address>
+    +getDefaultAddress() : Optional<Address>
+  }
+  class Product {
+    -id : String
+    -name : String
+    -description : String
+    -price : Money
+    -availableStock : int
+    -categoryId : String
+    -active : boolean
+    -averageRating : double
+    -reviewCount : int
+    -createdAt : LocalDateTime
+    -soldCount : long
+    -imageUrls : List<String>
+    +isAvailable(required : Quantity) : boolean
+    +deductStock(quantity : Quantity) : void
+    +recordSale(quantity : Quantity) : void
+  }
+  class Cart {
+    -cartId : String
+    -userId : String
+    -items : Map<String, CartItem>
+    +addProduct(product : Product, quantity : Quantity) : void
+    +isEmpty() : boolean
+    +getItems() : List<CartItem>
+    +calculateSubtotal() : Money
+    +removeCheckedOutItems(snapshot : List<CartItem>) : void
+  }
+  class Order {
+    -orderId : String
+    -userId : String
+    -items : List<OrderItem>
+    -deliveryAddress : Address
+    -itemsSubtotal : Money
+    -discountAmount : Money
+    -shippingFee : Money
+    -payableAmount : Money
+    -status : OrderStatus
+    -createdAt : LocalDateTime
+    -paidAt : LocalDateTime
+    -transactions : List<PaymentTransaction>
+    +getStatus() : OrderStatus
+    +getItems() : List<OrderItem>
+    +recordTransaction(transaction : PaymentTransaction) : void
+    +markAsPaid(paymentTime : LocalDateTime) : void
+    +markAsPaymentFailed() : void
+    +updateStatus(newStatus : OrderStatus) : void
+  }
+}
+
+package "org.example.model.vo" as values {
+  class Address <<record>> {
+    -addressId : String
+    -recipientName : String
+    -phone : String
+    -province : String
+    -city : String
+    -streetAddress : String
+    -postalCode : String
+    -title : String
+    -isDefault : boolean
+  }
+  class CartItem <<record>> {
+    -productId : String
+    -productName : String
+    -unitPrice : Money
+    -quantity : Quantity
+    +getLineTotal() : Money
+  }
+  class Category <<record>> {
+    -id : String
+    -name : String
+    -description : String
+    -active : boolean
+  }
+  class ContactInfo <<record>> {
+    -email : String
+    -phone : String
+    +matches(identifier : String) : boolean
+  }
+  class Coupon <<record>> {
+    -code : String
+    -discountPercent : int
+    -maxDiscount : Money
+    -minOrderAmount : Money
+    -expiryDate : LocalDate
+    +isValid(subtotal : Money, currentDate : LocalDate) : boolean
+    +calculateDiscount(subtotal : Money) : Money
+  }
+  class Money <<record>> {
+    -amount : BigDecimal
+    -currency : String
+  }
+  class OrderItem <<record>> {
+    -productId : String
+    -productName : String
+    -unitPrice : Money
+    -quantity : Quantity
+    -lineTotal : Money
+  }
+  class PaymentTransaction <<record>> {
+    -transactionId : String
+    -orderId : String
+    -amount : Money
+    -method : PaymentMethod
+    -status : PaymentStatus
+    -timestamp : LocalDateTime
+    -referenceCode : String
+  }
+  class Quantity <<record>> {
+    -value : int
+  }
+  class Review <<record>> {
+    -reviewId : String
+    -userId : String
+    -authorName : String
+    -productId : String
+    -rating : int
+    -commentText : String
+    -createdAt : LocalDateTime
+  }
+}
+
+package "org.example.model.enums" as enumerations {
+  enum UserRole <<enumeration>> {
+    CUSTOMER
+    ADMIN
+    STOREKEEPER
+  }
+  enum OrderStatus <<enumeration>> {
+    PENDING
+    PAYMENT_FAILED
+    PAID
+    PROCESSING
+    SHIPPED
+    DELIVERED
+    CANCELLED
+  }
+  enum PaymentMethod <<enumeration>> {
+    ONLINE_GATEWAY
+    WALLET
+    CASH_ON_DELIVERY
+  }
+  enum PaymentStatus <<enumeration>> {
+    SUCCESS
+    FAILED
+    CANCELLED
+  }
+}
+
+package "org.example.util" as utilities {
+  class DataSeeder {
+    {static} +seed(Map<String, User>, Map<String, String>, Map<String, Category>, ProductService, Map<String, Coupon>) : void
+  }
+  class PasswordUtil {
+    {static} +hashPassword(rawPassword : String) : String
+    {static} +verifyPassword(rawPassword : String, storedHash : String) : boolean
+  }
+}
+
+package "org.example.exception" as exceptions {
+  abstract class ShopException
+  class AuthenticationException
+  class CategoryNotFoundException
+  class DuplicateUserException
+  class InsufficientStockException
+  class InvalidCouponException
+  class InvalidInputException
+  class InvalidOrderStateException
+  class OrderNotFoundException
+  class ProductNotFoundException
+  class UnauthorizedActionException
+  class UserNotFoundException
+}
+package "org.example.service.port" as ports {
+  interface CartRepository {
+    +findByUserId(userId : String) : Optional<Cart>
+    +getOrCreate(userId : String) : Cart
+    +save(cart : Cart) : void
+  }
+  interface CategoryRepository {
+    +findById(categoryId : String) : Optional<Category>
+    +findAll() : List<Category>
+    +save(category : Category) : void
+  }
+  interface CheckoutSnapshotRepository {
+    +saveSnapshot(orderId : String, items : List<CartItem>) : void
+    +removeSnapshot(orderId : String) : Optional<List<CartItem>>
+  }
+  interface CouponRepository {
+    +findByCode(code : String) : Optional<Coupon>
+    +save(coupon : Coupon) : void
+  }
+  interface CredentialRepository {
+    +savePasswordHash(userId : String, passwordHash : String) : void
+    +findPasswordHashByUserId(userId : String) : Optional<String>
+  }
+  interface IdGenerator {
+    +nextId(prefix : String) : String
+  }
+  interface OrderRepository {
+    +findById(orderId : String) : Optional<Order>
+    +findByUserId(userId : String) : List<Order>
+    +findAll() : List<Order>
+    +save(order : Order) : void
+  }
+  interface PasswordHasher {
+    +hash(rawPassword : String) : String
+    +matches(rawPassword : String, storedHash : String) : boolean
+  }
+  interface PasswordResetRepository {
+    +saveResetToken(userId : String, token : ResetToken) : void
+    +findResetToken(userId : String) : Optional<ResetToken>
+    +removeResetToken(userId : String) : void
+  }
+  class ResetToken <<record>> {
+    -tokenHash : String
+    -expiresAt : LocalDateTime
+  }
+  interface ProductRepository {
+    +findById(productId : String) : Optional<Product>
+    +findAll() : List<Product>
+    +save(product : Product) : void
+  }
+  interface ReviewRepository {
+    +addReview(review : Review) : void
+    +findByProductId(productId : String) : List<Review>
+  }
+  interface SessionRepository {
+    +saveSession(sessionToken : String, userId : String) : void
+    +findUserIdByToken(sessionToken : String) : Optional<String>
+    +removeSession(sessionToken : String) : void
+    +removeAllSessionsForUser(userId : String) : void
+  }
+  interface UserRepository {
+    +findById(userId : String) : Optional<User>
+    +findByIdentifier(identifier : String) : Optional<User>
+    +existsByEmail(email : String) : boolean
+    +existsByPhone(phone : String) : boolean
+    +existsByPhoneExcludingUser(phone : String, excludedUserId : String) : boolean
+    +save(user : User) : void
+    +findAll() : List<User>
+  }
+  interface VerificationCodeGenerator {
+    +nextSixDigitCode() : String
+  }
+}
+
+package "org.example.infrastructure.persistence" as persistence {
+  class InMemoryCartRepository {
+    -store : Map<String, Cart>
+  }
+  class InMemoryCategoryRepository {
+    -store : Map<String, Category>
+  }
+  class InMemoryCheckoutSnapshotRepository {
+    -store : Map<String, List<CartItem>>
+  }
+  class InMemoryCouponRepository {
+    -store : Map<String, Coupon>
+  }
+  class InMemoryCredentialRepository {
+    -store : Map<String, String>
+  }
+  class InMemoryOrderRepository {
+    -store : Map<String, Order>
+  }
+  class InMemoryPasswordResetRepository {
+    -store : Map<String, ResetToken>
+  }
+  class InMemoryProductRepository {
+    -store : Map<String, Product>
+  }
+  class InMemoryReviewRepository {
+    -store : Map<String, List<Review>>
+  }
+  class InMemorySessionRepository {
+    -store : Map<String, String>
+  }
+  class InMemoryUserRepository {
+    -store : Map<String, User>
+  }
+  class RepositoryPreconditions {
+    {static} ~requireNonBlank(value : String, fieldName : String) : String
+  }
+}
+
+package "org.example.infrastructure.security" as security {
+  class RandomVerificationCodeGenerator {
+    -random : SecureRandom
+  }
+  class Sha256PasswordHasher
+  class UuidIdGenerator
+}
+
+class RuntimeException <<JDK>>
+class IllegalArgumentException <<JDK>>
+
+Main ..> DataSeeder
+Main ..> MainMenuController
+DataSeeder ..> ProductService
+DataSeeder ..> PasswordUtil
+MainMenuController --> GuestMenu : guestMenu
+MainMenuController --> CustomerMenu : customerMenu
+MainMenuController --> AdminMenu : adminMenu
+MainMenuController --> ConsoleIO : io
+MainMenuController --> "0..1" AuthService : authService
+GuestMenu "0..1" *--> "1" CatalogMenu : catalogMenu
+CustomerMenu "0..1" *--> "1" CatalogMenu : catalogMenu
+GuestMenu --> AuthService : authService
+CustomerMenu --> CartService : cartService
+CustomerMenu --> OrderService : orderService
+
+AuthService +-- PasswordReset
+AuthService ..> PasswordUtil
+UserService --> "0..*" User : userStore
+ProductService --> "0..*" Product : productStore
+ProductService --> "0..*" Category : categoryStore
+CartService --> ProductService : productService
+CartService --> "0..*" Cart : cartStore
+OrderService --> "0..1" CartService : cartService
+OrderService --> "0..1" ProductService : productService
+OrderService --> "0..1" UserService : userService
+OrderService --> "0..*" Order : orderStore
+OrderService --> "0..*" Coupon : couponStore
+ReviewService --> OrderService : orderService
+ReviewService --> ProductService : productService
+ReviewService --> "0..*" Review : productReviewsStore
+
+User --> "0..*" Address : addresses
+User ..> ContactInfo
+User --> UserRole : role
+Cart "0..1" *--> "0..*" CartItem : items
+Order "0..1" *--> "1..*" OrderItem : items
+Order "0..1" *--> "0..*" PaymentTransaction : transactions
+Order "0..*" --> "1" Address : deliveryAddress
+Order --> OrderStatus : status
+PaymentTransaction --> PaymentMethod : method
+PaymentTransaction --> PaymentStatus : status
+Product "0..*" --> "1" Money : price
+Order "0..*" --> "1" Money : payableAmount
+OrderItem "0..*" --> "1" Money : unitPrice
+OrderItem "0..*" --> "1" Quantity : quantity
+PaymentTransaction "0..*" --> "1" Money : amount
+
+ShopException -right-|> RuntimeException
+IllegalArgumentException -right-|> RuntimeException
+AuthenticationException -right-|> ShopException
+CategoryNotFoundException -right-|> ShopException
+DuplicateUserException -right-|> ShopException
+InsufficientStockException -right-|> ShopException
+InvalidCouponException -right-|> ShopException
+InvalidInputException -right-|> IllegalArgumentException
+InvalidOrderStateException -right-|> ShopException
+OrderNotFoundException -right-|> ShopException
+ProductNotFoundException -right-|> ShopException
+UnauthorizedActionException -right-|> ShopException
+UserNotFoundException -right-|> ShopException
+PasswordResetRepository +-- ResetToken
+InMemoryCartRepository .right.|> CartRepository
+InMemoryCategoryRepository .right.|> CategoryRepository
+InMemoryCheckoutSnapshotRepository .right.|> CheckoutSnapshotRepository
+InMemoryCouponRepository .right.|> CouponRepository
+InMemoryCredentialRepository .right.|> CredentialRepository
+InMemoryOrderRepository .right.|> OrderRepository
+InMemoryPasswordResetRepository .right.|> PasswordResetRepository
+InMemoryProductRepository .right.|> ProductRepository
+InMemoryReviewRepository .right.|> ReviewRepository
+InMemorySessionRepository .right.|> SessionRepository
+InMemoryUserRepository .right.|> UserRepository
+RandomVerificationCodeGenerator .right.|> VerificationCodeGenerator
+Sha256PasswordHasher .right.|> PasswordHasher
+UuidIdGenerator .right.|> IdGenerator
+CartRepository -[hidden]down- CheckoutSnapshotRepository
+InMemoryCartRepository -[hidden]down- InMemoryCheckoutSnapshotRepository
+CategoryRepository -[hidden]down- CouponRepository
+InMemoryCategoryRepository -[hidden]down- InMemoryCouponRepository
+CheckoutSnapshotRepository -[hidden]down- CredentialRepository
+InMemoryCheckoutSnapshotRepository -[hidden]down- InMemoryCredentialRepository
+CouponRepository -[hidden]down- OrderRepository
+InMemoryCouponRepository -[hidden]down- InMemoryOrderRepository
+CredentialRepository -[hidden]down- PasswordResetRepository
+InMemoryCredentialRepository -[hidden]down- InMemoryPasswordResetRepository
+OrderRepository -[hidden]down- ProductRepository
+InMemoryOrderRepository -[hidden]down- InMemoryProductRepository
+PasswordResetRepository -[hidden]down- ReviewRepository
+InMemoryPasswordResetRepository -[hidden]down- InMemoryReviewRepository
+ProductRepository -[hidden]down- SessionRepository
+InMemoryProductRepository -[hidden]down- InMemorySessionRepository
+ReviewRepository -[hidden]down- UserRepository
+InMemoryReviewRepository -[hidden]down- InMemoryUserRepository
+Sha256PasswordHasher ..> PasswordUtil
+@enduml
